@@ -70,7 +70,7 @@ impl SignatureScheme for Ecdsa {
 
   /// create keypair (first is public, second is private)
   fn new_keypair() -> (Vec<u8>, Vec<u8>) {
-    let seed = random_bytes(512);
+    let seed = random_bytes(32);
     let (pr, pu) = ed25519::keypair(&seed[..]);
     (pu.to_vec(), pr.to_vec())
   }
@@ -91,19 +91,17 @@ impl StripleKind for EcdsaRipemd160 {
 
 #[test]
 fn test_crypto() {
-    let seed = random_bytes(512);
+    let seed = random_bytes(32);
+//    let seed = [0x26, 0x27, 0xf6, 0x85, 0x97, 0x15, 0xad, 0x1d, 0xd2, 0x94, 0xdd, 0xc4, 0x76, 0x19, 0x39, 0x31,
+ //                   0xf1, 0xad, 0xb5, 0x58, 0xf0, 0x93, 0x97, 0x32, 0x19, 0x2b, 0xd1, 0xc0, 0xfd, 0x16, 0x8e, 0x4e];
     let content = random_bytes(512);
-    let (pr, pu) = ed25519::keypair(&seed[..]);
-    let publkey = pu.to_vec();
-    let prikey = pr.to_vec();
-    let exch = ed25519::exchange(&publkey[..],&prikey[..]).to_vec();
-    let sig = ed25519::signature(&content[..], &prikey[..]).to_vec();
-    let result =  ed25519::verify(&content[..],&publkey[..],&sig[..]);
-    println!("check res : {:?}", result);
-    assert!(result);
+    let (pr, pu) = ed25519::keypair(&seed);
+    let sig2 = ed25519::signature(&content, &pr);
+    let result2 =  ed25519::verify(&content,&pu, &sig2);
+    println!("check res : {:?}", result2);
+    assert!(result2);
 }
 
-/* TODO when lib basic fn works enable those test (see previous)
 #[test]
 fn test_ecdsripemd160kind(){
   // TODO key length to 160 when test with quickcheck
@@ -114,7 +112,7 @@ fn test_ecdsripemd160kind(){
 fn test_chaining() {
   chaining_test::<EcdsaRipemd160, EcdsaRipemd160> () 
 }
-*/
+
 fn hash_buf_crypto(buff : &[u8], digest : &mut Digest) -> Vec<u8> {
   let bsize = digest.block_size();
   let bbytes = ((bsize+7)/8);
