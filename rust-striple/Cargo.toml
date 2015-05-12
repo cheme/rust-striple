@@ -5,7 +5,7 @@ version = "0.0.1"
 authors = ["Emeric Chevalier <emericchevalier.pro@gmail.com>"]
 
 [features]
-default = ["public_ripemd","serialize","public_openssl"]
+default = ["public_ripemd","serialize","public_openssl","cryptoecdsa"]
 serialize = ["rustc-serialize"]
 opensslrsa = ["openssl"]
 cryptoecdsa = ["rust-crypto"]

@@ -2,7 +2,6 @@
 //! signing/validation does not involve a private key.
 //! Scheme combine unique id (to ensure different key for same content) and hash for key derivation.
 
-mod public {
 extern crate uuid;
 use self::uuid::Uuid;
 use std::fmt::Debug;
@@ -34,8 +33,7 @@ impl<H : Hash> SignatureScheme for PubSign<H> {
   /// create keypair (first is public, second is private)
   /// TODO size shoud depend on hash length (num biguint?)
   fn new_keypair() -> (Vec<u8>, Vec<u8>) {
-    let mut id = Vec::new();
-    id.push_all(Uuid::new_v4().as_bytes());
+    let id = Uuid::new_v4().as_bytes().to_vec();
     (id.clone(),id)
   }
 }
@@ -157,10 +155,6 @@ mod public_sha512 {
 
 
 
-/*  let mut digest = Hasher::new(Type::SHA512); // TODO in filestore parameter with a supported hash enum
-  let mut digest = Hasher::new(Type::RIPEMD160); // TODO in filestore parameter with a supported hash enum
-  let mut digest = Hasher::new(Type::SHA256); // TODO in filestore parameter with a supported hash enum*/
-
 pub fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
   let mut digest = Hasher::new(typ);
   digest.write_all(buf1);
@@ -260,8 +254,5 @@ pub fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
 
 
 
-
-
 }
 
-}

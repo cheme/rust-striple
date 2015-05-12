@@ -18,3 +18,11 @@ extern crate rustc_serialize;
 pub mod striple;
 pub mod public;
 mod stripledata; 
+
+
+#[cfg(feature="opensslrsa")]
+pub mod rsa_openssl;
+#[cfg(feature="cryptoecdsa")]
+pub mod ecdsa_crypto;
+
+
