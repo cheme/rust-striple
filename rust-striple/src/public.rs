@@ -9,16 +9,17 @@ use std::marker::PhantomData;
 use striple::SignatureScheme;
 use striple::PublicScheme;
 
-trait Hash : Debug + Clone {
+/// Technical trait
+pub trait CHash : Debug + Clone {
   fn hash (from : &[u8], content : &[u8]) -> Vec<u8>;
   fn len () -> usize;
 }
 
 #[derive(Debug,Clone)]
-struct PubSign<H : Hash>(PhantomData<H>);
+pub struct PubSign<H : CHash>(PhantomData<H>);
 
 /// generic public signature scheme
-impl<H : Hash> SignatureScheme for PubSign<H> {
+impl<H : CHash> SignatureScheme for PubSign<H> {
   /// hash of content and from key (pri)
   fn sign_content(pri : &[u8], cont : &[u8]) -> Vec<u8> {
     H::hash(pri, cont)
@@ -26,7 +27,6 @@ impl<H : Hash> SignatureScheme for PubSign<H> {
 
   /// first parameter is public key, second is content and third is signature
   fn check_content(publ : &[u8],cont : &[u8],sig : &[u8]) -> bool {
-    println!("INTO CHECKcontent");
     Self::sign_content(publ, cont) == sig
   }
 
@@ -40,25 +40,23 @@ impl<H : Hash> SignatureScheme for PubSign<H> {
 
 
 /// Public signature scheme are public
-impl<H : Hash> PublicScheme for PubSign<H> {}
+impl<H : CHash> PublicScheme for PubSign<H> {}
 
 
 #[cfg(feature="public_ripemd")]
-pub mod public_ripemd {
+pub mod public_crypto {
   extern crate crypto;
-  use striple::{StripleKind,IDDerivation,IdentityKD,SignatureScheme};
+  use striple::{StripleKind,IdentityKD};
   use stripledata::PUBRIPEMKEY;
-  use std::marker::PhantomData;
   use self::crypto::digest::Digest;
   use self::crypto::ripemd160::Ripemd160;
-  use super::{PubSign,Hash};
-  use std::fmt::Debug;
+  use super::{PubSign,CHash};
 
   #[cfg(test)]
   use striple::test::{test_striple_kind,chaining_test};
 
   #[derive(Debug,Clone)]
-  struct PubRipemd;
+  pub struct PubRipemd;
 
   impl StripleKind for PubRipemd {
     type D = IdentityKD;
@@ -70,12 +68,12 @@ pub mod public_ripemd {
   }
 
   #[derive(Debug,Clone)]
-  struct Ripemd;
+  pub struct Ripemd;
 
-  impl Hash for Ripemd {
+  impl CHash for Ripemd {
 
   fn hash(buff1 : &[u8], buff2 : &[u8]) -> Vec<u8> {
-    let mut digest = Ripemd160::new();
+    let digest = Ripemd160::new();
     hash_crypto(buff1, buff2, digest)
   }
   // TODO test rand buff2 and 1 hash compare to their cat with empty buff
@@ -86,9 +84,9 @@ pub mod public_ripemd {
 
   fn hash_crypto<H : Digest>(buff1 : &[u8], buff2 : &[u8], mut digest : H) -> Vec<u8> {
     let bsize = digest.block_size();
-    let bbytes = ((bsize+7)/8);
+    let bbytes = (bsize+7)/8;
     let ressize = digest.output_bits();
-    let outbytes = ((ressize+7)/8);
+    let outbytes = (ressize+7)/8;
     debug!("{:?}:{:?}", bsize,ressize);
     let mut tmpvec = Vec::new();
     let nbiter1 = (buff1.len() -1) / bbytes;
@@ -103,7 +101,7 @@ pub mod public_ripemd {
     tmpvec.push_all(&buff1[(nbiter1) * bbytes..]);
     let adj = bbytes - tmpvec.len();
     tmpvec.push_all(&buff2[0 .. adj]);
-    digest.input(&tmpvec[..]);
+    digest.input(&tmpvec);
 
     let bufff2 = &buff2[adj..];
     let nbiter2 = if bufff2.len() == 0 {
@@ -122,15 +120,14 @@ pub mod public_ripemd {
 
     //  digest.input(&buf[(nbiter -1)*bbytes .. ]);
     let mut rvec : Vec<u8> = vec![0; outbytes];
-    let rbuf = &mut rvec[..];
+    let rbuf = &mut rvec;
     digest.result(rbuf);
     rbuf.to_vec()
   }
  
   #[test]
   fn test_pub_ripemdkind(){
-    // TODO key length to 160 when test with quickcheck
-    test_striple_kind::<PubRipemd> (1, true);
+    test_striple_kind::<PubRipemd> (20, true);
   }
 
   #[test]
@@ -142,32 +139,31 @@ pub mod public_ripemd {
 }
 
 #[cfg(feature="public_openssl")]
-mod public_sha512 {
+pub mod public_openssl {
   extern crate openssl;
   use self::openssl::crypto::hash::{Hasher,Type};
   use std::io::Write;
   #[cfg(test)]
   use striple::test::{test_striple_kind,chaining_test};
   use stripledata;
-  use striple::{StripleKind,IDDerivation,IdentityKD,SignatureScheme};
-  use super::{PubSign,Hash};
-  use std::fmt::Debug;
+  use striple::{StripleKind,IdentityKD};
+  use super::{PubSign,CHash};
 
 
 
-pub fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
+fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
   let mut digest = Hasher::new(typ);
-  digest.write_all(buf1);
-  digest.write_all(buf2);
+  digest.write_all(buf1).unwrap();
+  digest.write_all(buf2).unwrap();
   digest.finish()
 }
 
   #[derive(Debug,Clone)]
-  struct PubRipemd;
+  pub struct PubRipemd;
   #[derive(Debug,Clone)]
-  struct PubSha512;
+  pub struct PubSha512;
   #[derive(Debug,Clone)]
-  struct PubSha256;
+  pub struct PubSha256;
 
 
 
@@ -197,14 +193,14 @@ pub fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
 
 
   #[derive(Debug,Clone)]
-  struct Ripemd;
+  pub struct Ripemd;
   #[derive(Debug,Clone)]
-  struct Sha512;
+  pub struct Sha512;
   #[derive(Debug,Clone)]
-  struct Sha256;
+  pub struct Sha256;
 
 
-  impl Hash for Ripemd {
+  impl CHash for Ripemd {
     fn hash(buff1 : &[u8], buff2 : &[u8]) -> Vec<u8> {
       hash_openssl(buff1, buff2, Type::RIPEMD160)
     }
@@ -212,7 +208,7 @@ pub fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
       160
     }
   }
-  impl Hash for Sha512 {
+  impl CHash for Sha512 {
     fn hash(buff1 : &[u8], buff2 : &[u8]) -> Vec<u8> {
       hash_openssl(buff1, buff2, Type::SHA512)
     }
@@ -220,7 +216,7 @@ pub fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
       512
     }
   }
-  impl Hash for Sha256 {
+  impl CHash for Sha256 {
     fn hash(buff1 : &[u8], buff2 : &[u8]) -> Vec<u8> {
       hash_openssl(buff1, buff2, Type::SHA256)
     }
@@ -231,20 +227,17 @@ pub fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
 
   #[test]
   fn test_pub_ripemdkind(){
-    // TODO key length to 160 when test with quickcheck
-    test_striple_kind::<PubRipemd> (1, true);
+    test_striple_kind::<PubRipemd> (20, true);
   }
 
   #[test]
   fn test_pub_sha512kind(){
-    // TODO key length to 160 when test with quickcheck
-    test_striple_kind::<PubSha512> (1, true);
+    test_striple_kind::<PubSha512> (64, true);
   }
 
   #[test]
   fn test_pub_sha256kind(){
-    // TODO key length to 160 when test with quickcheck
-    test_striple_kind::<PubSha256> (1, true);
+    test_striple_kind::<PubSha256> (32, true);
   }
 
   #[test]

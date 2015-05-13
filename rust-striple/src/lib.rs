@@ -16,13 +16,31 @@ extern crate num;
 extern crate rustc_serialize;
 
 pub mod striple;
-pub mod public;
+mod public;
 mod stripledata; 
 
 
 #[cfg(feature="opensslrsa")]
-pub mod rsa_openssl;
+mod rsa_openssl;
 #[cfg(feature="cryptoecdsa")]
-pub mod ecdsa_crypto;
+mod ecdsa_crypto;
 
+
+pub mod striple_kind {
+  pub mod public {
+  #[cfg(feature="public_crypto")]
+  pub mod crypto {
+    pub use public::public_crypto::{PubRipemd};
+  }
+  #[cfg(feature="public_openssl")]
+  pub mod openssl {
+    pub use public::public_openssl::{PubRipemd,PubSha512,PubSha256};
+  }
+  }
+
+  #[cfg(feature="opensslrsa")]
+  pub use rsa_openssl::Rsa2048Sha512;
+  #[cfg(feature="cryptoecdsa")]
+  pub use ecdsa_crypto::EcdsaRipemd160;
+}
 

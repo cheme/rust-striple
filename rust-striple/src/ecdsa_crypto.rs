@@ -4,21 +4,19 @@
 extern crate crypto;
 extern crate rand;
 
-
-
-use std::fmt::Debug;
-use std::marker::PhantomData;
 use striple::SignatureScheme;
 use striple::IDDerivation;
 use striple::StripleKind;
-use striple::PublicScheme;
 use self::crypto::digest::Digest;
 use self::crypto::ripemd160::Ripemd160;
 use self::crypto::ed25519;
-use std::io::Write;
 use stripledata;
 use self::rand::Rng;
 use self::rand::thread_rng;
+
+#[cfg(test)]
+#[cfg(feature="public_ripemd")]
+use public::public_crypto::PubRipemd;
 
 #[cfg(test)]
 use striple::test::{test_striple_kind,chaining_test};
@@ -43,7 +41,7 @@ impl IDDerivation for RIPEMD160KD {
 
 
 #[derive(Debug,Clone)]
-struct Ecdsa;
+pub struct Ecdsa;
 
 /// generic public signature scheme
 impl SignatureScheme for Ecdsa {
@@ -52,7 +50,7 @@ impl SignatureScheme for Ecdsa {
     let mut digest = Ripemd160::new();
     let chash = hash_buf_crypto(cont, &mut digest);
  
-    let sig = ed25519::signature(&chash[..], pri).to_vec();
+    let sig = ed25519::signature(&chash, pri).to_vec();
     sig
   }
 
@@ -64,14 +62,14 @@ impl SignatureScheme for Ecdsa {
       let mut digest = Ripemd160::new();
       let chash = hash_buf_crypto(cont, &mut digest);
 
-      ed25519::verify(&chash[..],publ,sign)
+      ed25519::verify(&chash,publ,sign)
     }
   }
 
   /// create keypair (first is public, second is private)
   fn new_keypair() -> (Vec<u8>, Vec<u8>) {
     let seed = random_bytes(32);
-    let (pr, pu) = ed25519::keypair(&seed[..]);
+    let (pr, pu) = ed25519::keypair(&seed);
     (pu.to_vec(), pr.to_vec())
   }
 }
@@ -79,7 +77,7 @@ impl SignatureScheme for Ecdsa {
 
 
 #[derive(Debug,Clone)]
-struct EcdsaRipemd160;
+pub struct EcdsaRipemd160;
 
 impl StripleKind for EcdsaRipemd160 {
   type D = RIPEMD160KD;
@@ -96,16 +94,14 @@ fn test_crypto() {
  //                   0xf1, 0xad, 0xb5, 0x58, 0xf0, 0x93, 0x97, 0x32, 0x19, 0x2b, 0xd1, 0xc0, 0xfd, 0x16, 0x8e, 0x4e];
     let content = random_bytes(512);
     let (pr, pu) = ed25519::keypair(&seed);
-    let sig2 = ed25519::signature(&content, &pr);
-    let result2 =  ed25519::verify(&content,&pu, &sig2);
-    println!("check res : {:?}", result2);
-    assert!(result2);
+    let sig = ed25519::signature(&content, &pr);
+    let result =  ed25519::verify(&content,&pu, &sig);
+    assert!(result);
 }
 
 #[test]
 fn test_ecdsripemd160kind(){
-  // TODO key length to 160 when test with quickcheck
-  test_striple_kind::<EcdsaRipemd160> (1, false);
+  test_striple_kind::<EcdsaRipemd160> (64, false);
 }
 
 #[test]
@@ -113,14 +109,21 @@ fn test_chaining() {
   chaining_test::<EcdsaRipemd160, EcdsaRipemd160> () 
 }
 
+
+#[test]
+#[cfg(feature="public_ripemd")]
+fn test_chaining_multi() {
+  chaining_test::<PubRipemd, EcdsaRipemd160> () 
+}
+
+
+
 fn hash_buf_crypto(buff : &[u8], digest : &mut Digest) -> Vec<u8> {
   let bsize = digest.block_size();
-  let bbytes = ((bsize+7)/8);
+  let bbytes = (bsize+7)/8;
   let ressize = digest.output_bits();
-  let outbytes = ((ressize+7)/8);
+  let outbytes = (ressize+7)/8;
   debug!("{:?}:{:?}", bsize,ressize);
-  let mut tmpvec : Vec<u8> = vec![0; bbytes];
-  let buf = &mut tmpvec[..];
 
   let nbiter = if buff.len() == 0 {
       0
@@ -137,7 +140,7 @@ fn hash_buf_crypto(buff : &[u8], digest : &mut Digest) -> Vec<u8> {
   };
 
   let mut rvec : Vec<u8> = vec![0; outbytes];
-  let rbuf = &mut rvec[..];
+  let rbuf = &mut rvec;
   digest.result(rbuf);
   rbuf.to_vec()
 }

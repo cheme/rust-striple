@@ -1,10 +1,10 @@
 
-use std::fmt::{Display,Debug};
+use std::fmt::{Debug};
 use std::marker::PhantomData;
 use num;
 use std::mem;
 use std::ptr::copy_nonoverlapping;
-use num::traits::{ToPrimitive, Bounded};
+use num::traits::{ToPrimitive};
 
 
 #[cfg(feature="serialize")]
@@ -127,7 +127,6 @@ impl IDDerivation for IdentityKD {
   /// simply equality
   #[inline]
   fn check_id_derivation(sig : &[u8], id : &[u8]) -> bool {
-    println!("{:?} with {:?}", sig, id);
     sig == id 
   }
 }
@@ -453,7 +452,7 @@ impl<T : StripleKind> StripleIf<T> for Striple<T> {
   fn get_id(&self) -> &[u8]{&self.id}
   #[inline]
   fn get_about(&self) -> &[u8] {
-    if(self.about.len() > 0) {
+    if self.about.len() > 0 {
       &self.about
     } else {
       &self.from
@@ -503,7 +502,7 @@ impl<'a,T : StripleKind> StripleIf<T> for StripleRef<'a,T> {
   fn get_id(&self) -> &[u8]{self.id}
   #[inline]
   fn get_about(&self) -> &[u8] {
-    if(self.about.len() > 0) {
+    if self.about.len() > 0 {
       self.about
     } else {
       self.from
@@ -577,12 +576,11 @@ impl<'a,T : StripleKind> StripleIf<T> for StripleRef<'a,T> {
     ix = ix + s;
 
     if ix != bytes.len() {
-      println!("strip or {:?} - {:?}", ix, bytes.len());
+      debug!("strip or {:?} - {:?}", ix, bytes.len());
       return Err(("Mismatch size of striple".to_string(), ErrorKind::DecodingError))
     }
 
     let checkerror : Option<Error>= docheck.and_then(|fromst|{
-println!("{:?}",bytes);
       if fromst.get_id() != &from[..] {
         return Some(("Unexpected from id".to_string(), ErrorKind::UnexpectedStriple))
       };
@@ -592,7 +590,6 @@ println!("{:?}",bytes);
          <FK::S as SignatureScheme>::check_content(fromst.get_key(), content, sig)) {
         return Some(("Invalid signature or key derivation".to_string(), ErrorKind::UnexpectedStriple))
       };
-println!("{:?}",content);
       None
     });
     match checkerror {
@@ -771,9 +768,7 @@ pub fn xtendsizedec(bytes : &[u8], ix : &mut usize, nbbyte : usize) -> usize {
     idx += 1;
   }
   
-  debug!("DEBUG {:?} !!!",res);
   *ix = idx + nbbytes;
-  println!("DEBUG_ix {:?} !!!",ix);
   res
 }
 
@@ -822,7 +817,6 @@ fn test_readwriteid () {
   let mut encid = Vec::new();
   push_id(&mut encid, &id_1);
   push_id(&mut encid, &id_2);
-  println!("debid{:?}",encid);
   let mut ix = 0;
   let nid_1 = read_id(&encid,&mut ix);
   let nid_2 = read_id(&encid,&mut ix);
@@ -841,16 +835,13 @@ pub fn push_id(res : &mut Vec<u8>, content : &[u8]) {
 #[inline]
 /// The function update index value
 pub fn read_id<'a> (bytes : &'a[u8], ix : &mut usize) -> &'a[u8] {
-  println!("ixbefid {:?}",ix);
   let s = xtendsizedec(bytes, ix, 1);
-  println!("ixaftid1 {:?}",ix);
   let res = if *ix + s <= bytes.len() {
     &bytes[*ix .. *ix + s]
   } else {
     &bytes[0 .. 0]
   };
   *ix = *ix + s;
-  println!("ixaftid2 {:?}",ix);
   res
 }
 
@@ -875,10 +866,9 @@ pub mod test {
   use striple::StripleKind;
   use striple::IDDerivation;
   use striple::SignatureScheme;
-  use super::compare_striple;
 
-  static TESTKIND1KEY : &'static [u8] = &[];
-  static TESTKIND2KEY : &'static [u8] = &[1,1,1];
+  static TESTKIND1KEY : &'static [u8] = &[1,1,1];
+  // static TESTKIND2KEY : &'static [u8] = &[];
 
   #[derive(Debug,Clone)]
   pub struct TestKind1;
@@ -913,7 +903,7 @@ pub mod test {
     }
     fn check_content(publ : &[u8],_ : &[u8],sig : &[u8]) -> bool {
       // Dummy just check pub = sig (pub = pri)
-      println!("checkcontet :pub {:?}, sig {:?}", publ, sig);
+      debug!("checkcontet :pub {:?}, sig {:?}", publ, sig);
       publ != sig
     }
     fn new_keypair() -> (Vec<u8>, Vec<u8>) {
@@ -929,12 +919,14 @@ pub mod test {
 
   #[test]
   fn test_striple_enc_dec () {
+    let common_id = random_bytes(4);
+    let common_id_2 = random_bytes(2);
     let ori_1 : Striple<TestKind1> = 
     Striple {
         contentenc : vec!(),
-        id : vec!(1,2,3),
-        from : vec!(4,5),
-        sig : vec!(1,2,3),
+        id : common_id.clone(),
+        from : common_id_2.clone(),
+        sig : common_id.clone(),
         about : vec!(),
         key : vec!(0),
         contentids : vec!(vec!(8,9)),
@@ -945,9 +937,9 @@ pub mod test {
     let ori_2 : Striple<TestKind1> = 
     Striple {
         contentenc : vec!(),
-        id : vec!(4,5),
+        id : common_id_2.clone(),
         from : vec!(),
-        sig : vec!(4,5),
+        sig : common_id_2.clone(),
         about : vec!(),
         key : vec!(0),
         contentids : vec!(),
@@ -957,7 +949,7 @@ pub mod test {
     };
     let ori_ref_1 = ori_1.as_striple();
     let encori_1 = ori_1.striple_ser();
-    println!("Encoded : \n{:?}",encori_1);
+    debug!("Encoded : \n{:?}",encori_1);
     let typednone : Option<&Striple<TestKind1>> = Some(&ori_2);
     let dec1_ref = Striple::striple_dser(&encori_1, typednone).unwrap();
     let dec1 : Striple<TestKind1> = dec1_ref.as_striple();
@@ -968,8 +960,8 @@ pub mod test {
   }
 
   /// test set to run on any striple kind
-  pub fn test_striple_kind<T : StripleKind> (key_length : usize, public : bool) {
-    unique_key_der::<T::D> (key_length);
+  pub fn test_striple_kind<T : StripleKind> (sig_length : usize, public : bool) {
+    unique_key_der::<T::D> (sig_length);
     if public {
       pub_sign::<T::S> ();
     } else {
@@ -977,13 +969,17 @@ pub mod test {
     };
   }
   
-  fn unique_key_der<D : IDDerivation> (key_length : usize) {
+  fn unique_key_der<D : IDDerivation> (sig_length : usize) {
     // TODO rewrite as quick check !!! and key as random long enough for scheme + sig 1 same
     // length, 2 and 3 plus some bytes
-    let sig_1 = &vec!(1,2,3,4)[..];
-    let sig_2 = &vec!(1,2,3)[..];
-    let sig_3 = &vec!(5,6,7)[..];
+    assert!(sig_length != 0);
+    let sig_1 = &random_bytes(sig_length)[..];
+    let sig_2 = &random_bytes(sig_length)[..];
+    let sig_3 = &random_bytes(sig_length)[..];
     let sig_null = &vec!()[..];
+    if sig_1 == sig_2 || sig_1 == sig_3 {
+      return unique_key_der::<D>(sig_length)
+    }
 
     let key_1 = D::derive_id (sig_1);
     let key_2 = D::derive_id (sig_2);
@@ -994,8 +990,8 @@ pub mod test {
     assert!((sig_2 == sig_2) || (key_2 != key_2));
     assert!((sig_3 == sig_2) || (key_3 != key_2));
 
-    // TODO generate signature of rendom right length and uncoment
-//    assert!(sig_1.len() >= key_1.len());
+    // generate signature of rendom right length and uncoment
+    assert!(sig_1.len() >= key_1.len());
     // case with small sig
     assert!(sig_null.len() == key_null.len());
 
@@ -1008,10 +1004,10 @@ pub mod test {
   fn pub_sign<S : SignatureScheme> () {
     let kp1 = S::new_keypair();
     let kp2 = S::new_keypair();
-    let cont_1 = &vec!(1,2,3,4)[..];
-    let cont_2 = &vec!()[..];
-    let sig_1 = S::sign_content(&kp1.1[..], cont_1);
-    let sig_2 = S::sign_content(&kp2.1[..], cont_2);
+    let cont_1 = &vec!(1,2,3,4);
+    let cont_2 = &vec!();
+    let sig_1 = S::sign_content(&kp1.1, cont_1);
+    let sig_2 = S::sign_content(&kp2.1, cont_2);
 
     // public of keypair unique (because include in content)
     assert!(kp1.0 != kp2.0);
@@ -1020,24 +1016,24 @@ pub mod test {
     assert!(kp2.0 == kp2.1);
  
     // check content does depend on from keypair (from must be added to content if hashing scheme)
-    assert!(S::check_content(&kp1.0[..], cont_1, &sig_1[..]));
-    assert!(!S::check_content(cont_1, cont_1, &sig_1[..]));
+    assert!(S::check_content(&kp1.0, cont_1, &sig_1));
+    assert!(!S::check_content(cont_1, cont_1, &sig_1));
     // and sig validate content
-    assert!(!S::check_content(&kp2.0[..], cont_2, cont_2));
+    assert!(!S::check_content(&kp2.0, cont_2, cont_2));
 
     // signing do not have salt (uniqueness by keypair pub in content).
-    assert!(S::sign_content(&kp1.1[..], cont_1) == sig_1);
-    assert!(S::sign_content(&kp2.1[..], cont_2) == sig_2);
+    assert!(S::sign_content(&kp1.1, cont_1) == sig_1);
+    assert!(S::sign_content(&kp2.1, cont_2) == sig_2);
 
   }
 
   fn pri_sign<S : SignatureScheme> () {
     let kp1 = S::new_keypair();
     let kp2 = S::new_keypair();
-    let cont_1 = &vec!(1,2,3,4)[..];
-    let cont_2 = &vec!(1,2,3,4,5)[..];
-    let sig_1 = S::sign_content(&kp1.1[..], cont_1);
-    let sig_2 = S::sign_content(&kp2.1[..], cont_2);
+    let cont_1 = &vec!(1,2,3,4);
+    let cont_2 = &vec!(1,2,3,4,5);
+    let sig_1 = S::sign_content(&kp1.1, cont_1);
+    let sig_2 = S::sign_content(&kp2.1, cont_2);
 
     // keypair unique
     assert!(kp1.0 != kp2.0);
@@ -1050,8 +1046,8 @@ pub mod test {
     assert!(S::sign_content(&kp2.1[..], cont_1) != &vec!()[..]);
 
     // signing must have salt : no since different public key in content
-//    assert!(S::sign_content(&kp1.1[..], cont_1) != sig_1);
- //   assert!(S::sign_content(&kp2.1[..], cont_2) != sig_2);
+    // assert!(S::sign_content(&kp1.1[..], cont_1) != sig_1);
+    // assert!(S::sign_content(&kp2.1[..], cont_2) != sig_2);
 
     // check content only when finely signed
     assert!(!S::check_content(&kp1.0[..], cont_1, &vec!(4)[..]));
@@ -1062,17 +1058,16 @@ pub mod test {
   // test for chaning integrity, construct a K1 root then K1 and K2 son then for K2 K1 and K2 son.
   // With test for altering integrity (mut striple).
   pub fn chaining_test<K1 : StripleKind, K2 : StripleKind> () {
-    // TODO rand in init of vecs
-    let contentenc = vec![0,0,0];
+    let contentenc = random_bytes(99);
     let recrootsign : Option<&(&Striple<K1>, &[u8])> = None;
-    let mut ownedroot : (Striple<K1>, Vec<u8>) = Striple::new(
+    let ownedroot : (Striple<K1>, Vec<u8>) = Striple::new(
       contentenc.clone(),
       recrootsign,
       None,
       Vec::new(),
-      vec!(3,4,5,7)
+      random_bytes(333)
     );
-    let mut root = ownedroot.0;
+    let root = ownedroot.0;
     // check algo is same as K1 get_algo
     assert_eq!(root.get_algo_key(), K1::get_algo_key());
     // check about and from are same as id
@@ -1082,30 +1077,30 @@ pub mod test {
     // check signed by itself
     assert!(root.check(&root));
     
-     let mut ownedson1 : (Striple<K1>, Vec<u8>) = Striple::new(
+     let ownedson1 : (Striple<K1>, Vec<u8>) = Striple::new(
       contentenc.clone(),
       Some(&(&root,&ownedroot.1[..])),
       // random about : no logic here because about is not validated
-      Some(vec!(4,5,1,4,3,4)),
+      Some(random_bytes(9)),
       // random contentids
       vec!(vec!(1),vec!(3,4,4)),
       vec!(),
     );
-    let mut son1 = ownedson1.0;
+    let son1 = ownedson1.0;
 
     assert!(son1.check(&root));
     assert!(!son1.check(&son1));
 
-    let mut ownedson2 : (Striple<K2>, Vec<u8>) = Striple::new(
+    let ownedson2 : (Striple<K2>, Vec<u8>) = Striple::new(
       contentenc.clone(),
       Some(&(&root,&ownedroot.1[..])),
       // random about : no logic here because about is not validated
-      Some(vec!(4,4,3,4)),
+      Some(random_bytes(7)),
       // random contentids
       vec!(vec!(5,1),vec!(3,4,4)),
       vec!(5,2),
     );
-    let mut son2 = ownedson2.0;
+    let son2 = ownedson2.0;
  
     assert!(son2.check(&root));
     assert!(!son2.check(&son1));
@@ -1113,7 +1108,7 @@ pub mod test {
 
 
 
-    let mut ownedson21 : (Striple<K1>, Vec<u8>) = Striple::new(
+    let ownedson21 : (Striple<K1>, Vec<u8>) = Striple::new(
       contentenc.clone(),
       Some(&(&son2,&ownedson2.1[..])),
       // random about : no logic here because about is not validated
@@ -1122,12 +1117,12 @@ pub mod test {
       vec!(vec!(5,1),vec!(3,4,4)),
       vec!(5,2),
     );
-    let mut son21 = ownedson21.0;
+    let son21 = ownedson21.0;
  
     assert!(son21.check(&son2));
     assert!(!son21.check(&root));
 
-    let mut ownedson22 : (Striple<K2>, Vec<u8>) = Striple::new(
+    let ownedson22 : (Striple<K2>, Vec<u8>) = Striple::new(
       contentenc.clone(),
       Some(&(&son2,&ownedson2.1[..])),
       // random about : no logic here because about is not validated
@@ -1136,12 +1131,12 @@ pub mod test {
       vec!(vec!(5,1),vec!(3,4,4)),
       vec!(5,2),
     );
-    let mut son22 = ownedson22.0;
+    let son22 = ownedson22.0;
 
     assert!(son22.check(&son2));
     assert!(!son22.check(&root));
 
-    let mut ownedson22bis : (Striple<K2>, Vec<u8>) = Striple::new(
+    let ownedson22bis : (Striple<K2>, Vec<u8>) = Striple::new(
       contentenc.clone(),
       Some(&(&son2,&ownedson2.1[..])),
       // random about : no logic here because about is not validated
@@ -1150,103 +1145,105 @@ pub mod test {
       vec!(vec!(5,1),vec!(3,4,4)),
       vec!(5,2),
     );
-    let mut son22bis = ownedson22bis.0;
+    let son22bis = ownedson22bis.0;
 
     // unicity of striple
     assert!(!compare_striple(&son22,&son22bis));
- 
+    let unknown_vec = random_bytes(6);
     // check changing `from` break previous checking (even if same from in check)
     let mut tmp2 = son22.clone();
     assert!(tmp2.check(&son2));
     let mut tmp1 = son1.clone();
     assert!(tmp1.check(&root));
-    tmp2.from = vec!(5,2,3,0,0,0);
+    tmp2.from = unknown_vec.clone();
     assert!(!tmp2.check(&son2));
-    tmp1.from = vec!(5,2,3,0,0,0);
+    tmp1.from = unknown_vec.clone();
     assert!(!tmp1.check(&root));
     
     // check changing `about` break previous checking...
     tmp2 = son22.clone();
     tmp1 = son1.clone();
-    tmp2.about = vec!(5,2,3,0,0,0);
+    tmp2.about = unknown_vec.clone();
     assert!(!tmp2.check(&son2));
-    tmp1.about = vec!(5,2,3,0,0,0);
+    tmp1.about = unknown_vec.clone();
     assert!(!tmp1.check(&root));
     // check changing `content` break previous checking...
     tmp2 = son22.clone();
     tmp1 = son1.clone();
-    tmp2.content = vec!(5,2,3,0,0,0);
+    tmp2.content = unknown_vec.clone();
     assert!(!tmp2.check(&son2));
-    tmp1.content = vec!(5,2,3,0,0,0);
+    tmp1.content = unknown_vec.clone();
     assert!(!tmp1.check(&root));
     // check changing `contentid` break previous checking...
     tmp2 = son22.clone();
     tmp1 = son1.clone();
-    tmp2.contentids = vec!(vec!(5,2,3,0,0,0));
+    tmp2.contentids = vec!(unknown_vec.clone());
     assert!(!tmp2.check(&son2));
-    tmp1.contentids = vec!(vec!(5,2,3,0,0,0));
+    tmp1.contentids = vec!(unknown_vec.clone());
     assert!(!tmp1.check(&root));
     // check changing `key` break previous checking...
     tmp2 = son22.clone();
     tmp1 = son1.clone();
-    tmp2.key = vec!(5,2,3,0,0,0);
+    tmp2.key = unknown_vec.clone();
     assert!(!tmp2.check(&son2));
-    tmp1.key = vec!(5,2,3,0,0,0);
+    tmp1.key = unknown_vec.clone();
     assert!(!tmp1.check(&root));
     // check changing `sig` break previous checking...
     tmp2 = son22.clone();
     tmp1 = son1.clone();
-    tmp2.sig = vec!(5,2,3,0,0,0);
+    tmp2.sig = unknown_vec.clone();
     assert!(!tmp2.check(&son2));
-    tmp1.sig = vec!(5,2,3,0,0,0);
+    tmp1.sig = unknown_vec.clone();
     assert!(!tmp1.check(&root));
     // check changing `id` break previous checking...
     tmp2 = son22.clone();
     tmp1 = son1.clone();
-    tmp2.id = vec!(5,2,3,0,0,0);
+    tmp2.id = unknown_vec.clone();
     assert!(!tmp2.check(&son2));
-    tmp1.id = vec!(5,2,3,0,0,0);
+    tmp1.id = unknown_vec.clone();
     assert!(!tmp1.check(&root));
     // check changing `encodingid` is impactless previous checking... (content encoding is not in
     // scheme and purely meta)
     tmp2 = son22.clone();
     tmp1 = son1.clone();
-    tmp2.contentenc = vec!(5,2,3,0,0,0);
+    tmp2.contentenc = unknown_vec.clone();
     assert!(tmp2.check(&son2));
-    tmp1.contentenc = vec!(5,2,3,0,0,0);
+    tmp1.contentenc = unknown_vec.clone();
     assert!(tmp1.check(&root));
 
   }
+
+  // utility
+  fn random_bytes(size : usize) -> Vec<u8> {
+    let mut rng = rand::thread_rng();
+    let mut bytes = vec![0; size];
+    rng.fill_bytes(&mut bytes);
+    bytes
+  }
+
+  /// comparison of well formed striple should only use key
+  /// this is more of an utility for debugging and testing
+  pub fn compare_striple<K1 : StripleKind, K2 : StripleKind> (st1 : &Striple<K1>, st2 : &Striple<K2>) -> bool {
+    <K1 as StripleKind>::get_algo_key() == <K2 as StripleKind>::get_algo_key()
+    && st1.contentenc == st2.contentenc
+    && st1.id == st2.id
+    && st1.from == st2.from
+    && (
+      st1.sig == st2.sig ||
+      (st1.sig.len()==0 && st1.id == st2.sig) ||
+      (st2.sig.len()==0 && st2.id == st1.sig) 
+      )
+    && (
+      st1.about == st2.about ||
+      (st1.about.len() == 0 && st1.from == st2.about) ||
+      (st2.about.len() == 0 && st2.from == st1.about)
+      )
+    && st1.key == st2.key
+    && st1.contentids == st2.contentids
+    && st1.content == st2.content
+  }
+
 }
-
-/// comparison of well formed striple should only use key
-/// this is more of an utility for debugging and testing
-/// TODO only for testing ??
-pub fn compare_striple<K1 : StripleKind, K2 : StripleKind> (st1 : &Striple<K1>, st2 : &Striple<K2>) -> bool {
-  <K1 as StripleKind>::get_algo_key() == <K2 as StripleKind>::get_algo_key()
-  && st1.contentenc == st2.contentenc
-  && st1.id == st2.id
-  && st1.from == st2.from
-  && (
-    st1.sig == st2.sig ||
-    (st1.sig.len()==0 && st1.id == st2.sig) ||
-    (st2.sig.len()==0 && st2.id == st1.sig) 
-    )
-  && (
-    st1.about == st2.about ||
-    (st1.about.len() == 0 && st1.from == st2.about) ||
-    (st2.about.len() == 0 && st2.from == st1.about)
-    )
-  && st1.key == st2.key
-  && st1.contentids == st2.contentids
-  && st1.content == st2.content
-}
-
-// TODO config test a multiple striple struct example!!!
-
-// TODO test sign with wrong private key!!
-
-// TODO test case on StripleIf  (for exemple encode with static behavior)
 
 
 

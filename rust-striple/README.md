@@ -18,11 +18,11 @@ WIP
 Overview
 --------
 
-* c linking
-
 * minimal abstraction : linkend to bytes or to Reader/Writer
 
 * encoding and key signing scheme interface
 
 * minimal dependency, only some implementing signing scheme (rsa ecdsa)
+
+* c linking
 

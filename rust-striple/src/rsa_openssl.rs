@@ -3,16 +3,19 @@
 
 extern crate openssl;
 
-use std::fmt::Debug;
-use std::marker::PhantomData;
 use striple::SignatureScheme;
 use striple::IDDerivation;
 use striple::StripleKind;
-use striple::PublicScheme;
 use self::openssl::crypto::hash::{Hasher,Type};
 use self::openssl::crypto::pkey::{PKey};
 use std::io::Write;
 use stripledata;
+
+#[cfg(test)]
+#[cfg(feature="public_openssl")]
+use public::public_openssl::PubSha512;
+
+
 
 #[cfg(test)]
 use striple::test::{test_striple_kind,chaining_test};
@@ -33,7 +36,7 @@ impl IDDerivation for SHA512KD {
       Vec::new()
     } else {
       let mut digest = Hasher::new(HASH_SIGN);
-      digest.write_all(sig);
+      digest.write_all(sig).unwrap();
       digest.finish()
     }
   }
@@ -41,7 +44,7 @@ impl IDDerivation for SHA512KD {
 
 
 #[derive(Debug,Clone)]
-struct Rsa2048;
+pub struct Rsa2048;
 
 /// generic public signature scheme
 impl SignatureScheme for Rsa2048 {
@@ -50,8 +53,8 @@ impl SignatureScheme for Rsa2048 {
     let mut pkey = PKey::new();
     pkey.load_priv(pri);
     let mut digest = Hasher::new(HASH_SIGN);
-    digest.write_all(cont);
-    pkey.sign_with_hash(&digest.finish()[..], HASH_SIGN)
+    digest.write_all(cont).unwrap();
+    pkey.sign_with_hash(&digest.finish(), HASH_SIGN)
   }
 
   /// first parameter is public key, second is content and third is signature
@@ -60,8 +63,8 @@ impl SignatureScheme for Rsa2048 {
     pkey.load_pub(publ);
 
     let mut digest = Hasher::new(HASH_SIGN);
-    digest.write_all(cont);
-    pkey.verify_with_hash(&digest.finish()[..], sign, HASH_SIGN)
+    digest.write_all(cont).unwrap();
+    pkey.verify_with_hash(&digest.finish(), sign, HASH_SIGN)
   }
 
   /// create keypair (first is public, second is private)
@@ -79,7 +82,7 @@ impl SignatureScheme for Rsa2048 {
 
 
 #[derive(Debug,Clone)]
-struct Rsa2048Sha512;
+pub struct Rsa2048Sha512;
 
 impl StripleKind for Rsa2048Sha512 {
   type D = SHA512KD;
@@ -91,13 +94,19 @@ impl StripleKind for Rsa2048Sha512 {
 
 #[test]
 fn test_rsa2048sha512kind(){
-  // TODO key length to 512 when test with quickcheck
-  test_striple_kind::<Rsa2048Sha512> (1, false);
+  test_striple_kind::<Rsa2048Sha512> (256, false);
 }
 
 #[test]
 fn test_chaining() {
   chaining_test::<Rsa2048Sha512, Rsa2048Sha512> () 
+}
+
+
+#[test]
+#[cfg(feature="public_openssl")]
+fn test_chaining_multi() {
+  chaining_test::<Rsa2048Sha512, PubSha512> () 
 }
 
 
