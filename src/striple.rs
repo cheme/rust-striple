@@ -21,7 +21,7 @@ pub trait StripleIf<T : StripleKind> : Clone + Debug {
 
   /// check striple integrity (signature and key)
   fn check<FK : StripleKind, FS : StripleIf<FK>> (&self, from : &FS) -> bool {
-    self.check_id() && self.check_sig(from)
+    self.check_id(from) && self.check_sig(from)
   }
 
   /// check signature of striple
@@ -30,8 +30,8 @@ pub trait StripleIf<T : StripleKind> : Clone + Debug {
   }
 
   /// check key of striple
-  fn check_id(&self) -> bool {
-    <T::D as IDDerivation>::check_id_derivation(self.get_sig(), self.get_id())
+  fn check_id<FK : StripleKind, FS : StripleIf<FK>> (&self, from : &FS) -> bool {
+    <FK::D as IDDerivation>::check_id_derivation(self.get_sig(), self.get_id())
   }
 
   /// get striple key value
@@ -47,7 +47,6 @@ pub trait StripleIf<T : StripleKind> : Clone + Debug {
   fn get_content(&self) -> &[u8];
   /// get content ids value
   fn get_content_ids(&self) -> Vec<&[u8]>;
-
 
 
 // TODO get content utils
@@ -117,7 +116,9 @@ pub trait IDDerivation {
 /// when signature is not to long we derive with identity
 pub struct IdentityKD;
 
-/// key is same as signature (case where signature does not need to be serialize)
+/// key is same as signature (case where signature does not need to be serialize) 
+/// warning this is prone to creating big key in heterogenous network (size of sig depends on
+/// parent striple).
 impl IDDerivation for IdentityKD {
   /// id
   #[inline]
@@ -339,10 +340,15 @@ pub struct StripleRef<'a, T : StripleKind> {
 // identic code for stripleref and striple   
 macro_rules! ser_content(() => (
   #[inline]
-  fn striple_ser_content (&self, res : &mut Vec<u8>) {
+  fn ser_tosig (&self, res : &mut Vec<u8>) {
     let mut tmplen;
 
-    push_id(res, &self.about);
+    // never encode the same value for about and id
+    if self.id != self.about {
+      push_id(res, &self.about);
+    } else {
+      push_id(res, &[]);
+    }
 
     tmplen = self.key.len();
     res.push_all(&xtendsize(tmplen,2));
@@ -391,18 +397,21 @@ impl<T : StripleKind> Striple<T> {
         phtype : PhantomData,
     };
 
-    let sig = match from {
+    let (sig,id) = match from {
       Some (st) => {
-        st.sign(&res)
+        let sig = st.sign(&res);
+        let id = TF::D::derive_id(&sig);
+        (sig, id)
       },
       None => {
-        T::S::sign_content(&keypair.1, &res.get_tosig())
+        let sig = T::S::sign_content(&keypair.1, &res.get_tosig());
+        let id = T::D::derive_id(&sig);
+        (sig, id)
       },
     };
     res.sig = sig;
-
-    let id = T::D::derive_id(&res.sig);
     res.id = id;
+
     match from {
       Some (st) => {
         res.from = st.get_id().to_vec();
@@ -439,7 +448,7 @@ impl<T : StripleKind> StripleIf<T> for Striple<T> {
     res.push_all(&xtendsize(tmplen,4));
     res.push_all(&self.sig);
 
-    self.striple_ser_content(&mut res);
+    self.ser_tosig(&mut res);
 
     res
   }
@@ -469,7 +478,7 @@ impl<T : StripleKind> StripleIf<T> for Striple<T> {
  
   fn get_tosig(&self) -> Vec<u8>{
     let mut res = Vec::new();
-    self.striple_ser_content(&mut res);
+    self.ser_tosig(&mut res);
     res
   }
 
@@ -489,7 +498,7 @@ impl<'a,T : StripleKind> StripleIf<T> for StripleRef<'a,T> {
     res.push_all(&xtendsize(tmplen,4));
     res.push_all(self.sig);
 
-    self.striple_ser_content(&mut res);
+    self.ser_tosig(&mut res);
 
     res
   }
@@ -514,13 +523,12 @@ impl<'a,T : StripleKind> StripleIf<T> for StripleRef<'a,T> {
   fn get_content(&self) -> &[u8] {self.content}
   #[inline]
   fn get_content_ids(&self) -> Vec<&[u8]> {self.contentids.clone()}
- 
+  #[inline]
   fn get_tosig(&self) -> Vec<u8>{
     let mut res = Vec::new();
-    self.striple_ser_content(&mut res);
+    self.ser_tosig(&mut res);
     res
   }
-
 
   /// decode from bytes
   /// TODO better error management
@@ -717,17 +725,23 @@ pub fn xtendsize(l : usize, nbbyte : usize) -> Vec<u8> {
   if l > maxval {
     nbbytes = calcnbbyte(l);
       debug!("DEBUG {:?} !!!",nbbytes);
-    let wrnbbyte = nbbytes + 127;
+
+    let wrnbbyte = ((nbbytes - nbbyte)).to_u8().unwrap() ^ 128;
     // push last byte of wrnbbyte
-    res.push ( wrnbbyte.to_u8().unwrap());
+    res.push (wrnbbyte);
   }
   // TODO find a way to parameterized those 4 bytes (max_value can't be use in static init)
   unsafe {
       debug!("DEBUG {:?} !!!",l);
-    let v : [u8;8] = mem::transmute(l);
+    let v : [u8;8] = if cfg!(target_endian = "little") {
+      mem::transmute(usize::from_be(l))
+    }else{
+      mem::transmute(l)
+    };
+ 
       debug!("DEBUG {:?} !!!",v);
 
-      res.push_all(&v[0 .. nbbytes]);
+      res.push_all(&v[8 - nbbytes .. 8]);
   };
 
   res
@@ -739,45 +753,43 @@ pub fn xtendsize(l : usize, nbbyte : usize) -> Vec<u8> {
 pub fn xtendsizedec(bytes : &[u8], ix : &mut usize, nbbyte : usize) -> usize {
   let mut res : usize = 0;
   let mut nbbytes = nbbyte;
-  // TODO precalc iteration in table
-  let mut maxval;
   let mut idx = *ix;
   let mut adj_ix = 0;
   // read value
-  loop {
-    maxval = (num::pow(2, nbbytes * 8) - 1) / 2;
-    res = unsafe {
-      let mut v : [u8;8] = mem::transmute(res);
-      debug!("DEBUG_bef {:?}, {:?} !!!",v, nbbytes);
-      if idx + nbbytes <= bytes.len() {
-        let b : &[u8] = &bytes[idx .. idx + nbbytes];
-        copy_nonoverlapping(b.as_ptr(),v.as_mut_ptr(),nbbytes);
-        debug!("DEBUG_aft {:?} !!!",v);
-        mem::transmute(v)
-      } else {
-        0
-      }
-    };
-    if res <= maxval {
-      break;
-    }
+  while bytes[idx] > 127 {
     // first byte minus its first bit
-    adj_ix += (bytes[idx] - 127).to_usize().unwrap();
-    debug!("adjix {:?} !!!",adj_ix);
-    nbbytes = adj_ix;
+    adj_ix += (bytes[idx] ^ 128).to_usize().unwrap();
+    println!("adjix {:?} !!!",adj_ix);
+    nbbytes += adj_ix;
     idx += 1;
   }
-  
+  res = unsafe {
+  let mut v : [u8;8] = mem::transmute(0usize);
+  debug!("DEBUG_bef {:?}, {:?} !!!",v, nbbytes);
+  if idx + nbbytes <= bytes.len() {
+    let b : &[u8] = &bytes[idx .. idx + nbbytes];
+    copy_nonoverlapping(b.as_ptr(),v[8-nbbytes..].as_mut_ptr(),nbbytes);
+    debug!("DEBUG_aft {:?} !!!",v);
+    if cfg!(target_endian = "little") {
+      usize::from_be(mem::transmute(v))
+    } else {
+      mem::transmute(v)
+    }
+  } else {
+    0
+  }
+  };
+
   *ix = idx + nbbytes;
   res
 }
 
 // get nbbyte for a value
 // TODO precalc iteration in table
-fn calcnbbyte(size : usize) -> usize {
+fn calcnbbyte(val : usize) -> usize {
   let mut res = 0;
   for i in (0 .. 8) {
-    if size < (num::pow(2,i*8) - 1)/2 {
+    if val < (num::pow(2,i*8) - 1)/2 {
       res = i;
       break;
     }
@@ -788,13 +800,17 @@ fn calcnbbyte(size : usize) -> usize {
 #[test]
 fn test_xtendsize () {
   assert_eq!(xtendsize(0,0),vec![]);
-  assert_eq!(xtendsize(0,1),vec![0]);
-  assert_eq!(xtendsize(127,1),vec![127]);
-//  assert_eq!(xtendsize(128,1),vec![128,128]);
-  assert_eq!(xtendsize(128,1),vec![129,128,0]);
-  assert_eq!(xtendsize(357,2),vec![101,1]);
-  assert_eq!(xtendsize(357,1),vec![129,101,1]);
-  assert_eq!(xtendsize(357000,1),vec![130,136,114,5]);
+  //assert_eq!(xtendsize(127,1),vec![127]);
+  assert_eq!(xtendsize(0,1),vec![0x0000]);
+  assert_eq!(xtendsize(127,1),vec![0x7f]);
+  assert_eq!(xtendsize(128,1),vec![129,0,128]);
+  //assert_eq!(xtendsize(128,1),vec![0x81,0x80,0]);
+  assert_eq!(xtendsize(357,2),vec![1,101]);
+  //assert_eq!(xtendsize(357,2),vec![0x65,0x01]);
+  assert_eq!(xtendsize(357,1),vec![129,1,101]);
+  //assert_eq!(xtendsize(357,1),vec![0x81,0x65,0x01]);
+  assert_eq!(xtendsize(357000,1),vec![130,5,114,136]);
+  //assert_eq!(xtendsize(357000,1),vec![0x82,0x88,0x72,0x05]);
 }
 
 #[test]
@@ -802,10 +818,10 @@ fn test_xtendsizedec () {
   assert_eq!(xtendsizedec(&[1,2,3,4,4],&mut 3,0),0);
   assert_eq!(xtendsizedec(&[1,2,3,0,4],&mut 3,1),0);
   assert_eq!(xtendsizedec(&[1,2,127,0,4],&mut 2,1),127);
-  assert_eq!(xtendsizedec(&[1,2,129,128,0],&mut 2,1),128);
-  assert_eq!(xtendsizedec(&[1,2,101,1,4],&mut 2,2),357);
-  assert_eq!(xtendsizedec(&[1,2,129,101,1],&mut 2,1),357);
-  assert_eq!(xtendsizedec(&[1,2,130,136,114,5],&mut 2,1),357000);
+  assert_eq!(xtendsizedec(&[1,2,129,0,128],&mut 2,1),128);
+  assert_eq!(xtendsizedec(&[1,2,1,101,4],&mut 2,2),357);
+  assert_eq!(xtendsizedec(&[1,2,129,1,101],&mut 2,1),357);
+  assert_eq!(xtendsizedec(&[1,2,130,5,114,136],&mut 2,1),357000);
   // overflow is same as 0 (bad)
   assert_eq!(xtendsizedec(&[1,2,130,136,114],&mut 2,1),0);
 }
@@ -902,7 +918,7 @@ pub mod test {
       pri.to_vec()
     }
     fn check_content(publ : &[u8],_ : &[u8],sig : &[u8]) -> bool {
-      // Dummy just check pub = sig (pub = pri)
+      // Dummy
       debug!("checkcontet :pub {:?}, sig {:?}", publ, sig);
       publ != sig
     }

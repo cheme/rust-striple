@@ -1,5 +1,5 @@
-mydht
-=====
+rust-striple
+============
 
 [![Build Status](https://travis-ci.org/cheme/rust-striple.svg?branch=master)](https://travis-ci.org/cheme/rust-striple)
 
