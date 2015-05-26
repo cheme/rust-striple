@@ -15,7 +15,7 @@ use self::rand::Rng;
 use self::rand::thread_rng;
 
 #[cfg(test)]
-#[cfg(feature="public_ripemd")]
+#[cfg(feature="public_crypto")]
 use public::public_crypto::PubRipemd;
 
 #[cfg(test)]
@@ -83,8 +83,15 @@ impl StripleKind for EcdsaRipemd160 {
   type D = RIPEMD160KD;
   type S = Ecdsa;
   fn get_algo_key() -> &'static [u8] {
-    stripledata::ECDSARIPEMD160KEY
+      match *stripledata::KIND {
+        Some (ref kinds) => {
+          &kinds.ecdsaripemd160.0.id[..]
+        },
+        None => stripledata::ECDSARIPEMD160KEY,
+      }
   }
+
+
 }
 
 #[test]
@@ -111,7 +118,7 @@ fn test_chaining() {
 
 
 #[test]
-#[cfg(feature="public_ripemd")]
+#[cfg(feature="public_crypto")]
 fn test_chaining_multi() {
   chaining_test::<PubRipemd, EcdsaRipemd160> () 
 }

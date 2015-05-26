@@ -43,7 +43,7 @@ impl<H : CHash> SignatureScheme for PubSign<H> {
 impl<H : CHash> PublicScheme for PubSign<H> {}
 
 
-#[cfg(feature="public_ripemd")]
+#[cfg(feature="public_crypto")]
 pub mod public_crypto {
   extern crate crypto;
   use striple::{StripleKind,IdentityKD};
@@ -171,24 +171,41 @@ fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
     type D = IdentityKD;
     type S = PubSign<Ripemd>;
     fn get_algo_key() -> &'static [u8] {
-      stripledata::PUBRIPEMKEY
+      match *stripledata::KIND {
+        Some (ref kinds) => {
+          &kinds.pubripemd.0.id[..]
+        },
+        None => stripledata::PUBRIPEMKEY,
+      }
     }
   }
 
   impl StripleKind for PubSha512 {
     type D = IdentityKD;
     type S = PubSign<Sha512>;
-    fn get_algo_key() -> &'static [u8] {
-      stripledata::PUBSHA512KEY
+     fn get_algo_key() -> &'static [u8] {
+      match *stripledata::KIND {
+        Some (ref kinds) => {
+          &kinds.pubsha512.0.id[..]
+        },
+        None => stripledata::PUBSHA512KEY,
+      }
     }
+
   }
 
   impl StripleKind for PubSha256 {
     type D = IdentityKD;
     type S = PubSign<Sha256>;
-    fn get_algo_key() -> &'static [u8] {
-      stripledata::PUBSHA256KEY
+     fn get_algo_key() -> &'static [u8] {
+      match *stripledata::KIND {
+        Some (ref kinds) => {
+          &kinds.pubsha256.0.id[..]
+        },
+        None => stripledata::PUBSHA256KEY,
+      }
     }
+
   }
 
 

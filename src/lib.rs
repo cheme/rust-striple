@@ -8,7 +8,11 @@
 //!
 
 #![feature(collections)]
+#![feature(core)]
 
+#![feature(debug_builders)]
+
+#[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
 extern crate num;
 
@@ -16,8 +20,13 @@ extern crate num;
 extern crate rustc_serialize;
 
 pub mod striple;
+pub mod storage;
+#[cfg(feature="public_crypto")]
 mod public;
-mod stripledata; 
+#[cfg(feature="public_openssl")]
+#[cfg(not(feature="public_crypto"))]
+mod public;
+pub mod stripledata; 
 
 
 #[cfg(feature="opensslrsa")]
@@ -27,6 +36,8 @@ mod ecdsa_crypto;
 
 
 pub mod striple_kind {
+  pub use striple::NoKind;
+
   pub mod public {
   #[cfg(feature="public_crypto")]
   pub mod crypto {

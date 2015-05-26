@@ -1,17 +1,81 @@
 
-use std::fmt::{Debug};
+
+use std::error::Error as ErrorTrait;
+use std::fmt::{Display,Debug,Formatter};
+use std::fmt::Result as FmtResult;
 use std::marker::PhantomData;
 use num;
 use std::mem;
 use std::ptr::copy_nonoverlapping;
 use num::traits::{ToPrimitive};
-
+use std::io::{Read};
+use std::io::Result as IOResult;
+#[cfg(test)]
+use std::io::Cursor;
+pub static NOKEY : &'static [u8] = &[];
 
 #[cfg(feature="serialize")]
 use rustc_serialize::{Encoder,Encodable,Decoder,Decodable};
+#[cfg(feature="serialize")]
+use rustc_serialize::base64::ToBase64;
+#[cfg(feature="serialize")]
+use rustc_serialize::base64;
 
 // TODO replace vec new push all [u8] by something better for convert &[u8] to Vec<u8> -> simply
 // to_vec() ????
+
+/// Striple could be a standard struct, or references to contents from others struct
+/// Trait should not be implemented for other struct (or conformance with test case needed).
+/// Other struct should implement AsStriple (probably to stripleRef).
+/// TODO word on enum to serialize and manage parametric types
+pub trait NewStripleIf : Clone + Debug {
+
+  /// check striple integrity (signature and key)
+  fn ncheck<FS : NewStripleIf> (&self, from : &FS) -> bool {
+    self.check_id(from) && self.check_sig(from)
+  }
+
+
+  /// check signature of striple
+  fn check_sig< FS : NewStripleIf> (&self, from : &FS) -> bool;
+
+  /// check key of striple
+  fn check_id<FS : NewStripleIf> (&self, from : &FS) -> bool;
+
+  /// get striple key value
+  fn get_id(&self) -> &[u8];
+
+  /// get striple key value
+  fn get_from(&self) -> &[u8];
+
+  /// get striple key value
+  fn get_about(&self) -> &[u8];
+
+  /// get conte value
+  fn get_content(&self) -> &[u8];
+  /// get content ids value
+  fn get_content_ids(&self) -> Vec<&[u8]>;
+
+  /// get striple key value
+  fn get_key(&self) -> &[u8];
+
+  /// get key of striple defining algo scheme
+  fn get_algo_key(&self) -> &'static [u8];
+
+  /// get striple signature value
+  fn get_sig(&self) -> &[u8];
+
+  // TODO test where decode from ser to striple, then check getbytes is allways the same
+  // (sig to) 
+  /// get bytes which must be signed
+  fn get_tosig(&self) -> Vec<u8>;
+
+  /// encode to bytes, but only striple content : Vec<u8> only include striple info.
+  fn striple_ser (&self) -> Vec<u8>;
+
+
+}
+
 
 /// Striple could be a standard struct, or references to contents from others struct
 /// Trait should not be implemented for other struct (or conformance with test case needed).
@@ -23,6 +87,7 @@ pub trait StripleIf<T : StripleKind> : Clone + Debug {
   fn check<FK : StripleKind, FS : StripleIf<FK>> (&self, from : &FS) -> bool {
     self.check_id(from) && self.check_sig(from)
   }
+
 
   /// check signature of striple
   fn check_sig<FK : StripleKind, FS : StripleIf<FK>> (&self, from : &FS) -> bool {
@@ -72,25 +137,13 @@ pub trait StripleIf<T : StripleKind> : Clone + Debug {
   /// encode to bytes, but only striple content : Vec<u8> only include striple info.
   fn striple_ser (&self) -> Vec<u8>;
 
-  /// decode from bytes, with possible signing validation
-  /// Deserialize does not result in StripleIf, because StripleIf is use to allow reference to
-  /// existing structure and adding content to a structure and still being an StripleIf, yet
-  /// deserialize as a library item is only here to enforce encoding of striple : 
-  /// to use on other structure deserialize must be use by a more general
-  /// deserialize primitive or if particular non striple encoding (in json for instance), the
-  /// resulting struct will use AsStriple (probably to stripleref) to use striple primitive.
-  fn striple_dser<'a, FK : StripleKind, FS : StripleIf<FK>>  (bytes : &'a[u8], docheck : Option<&FS>) -> Result<StripleRef<'a,T>, Error> {
-    StripleRef::striple_dser(bytes, docheck)
-  }
-
-
 }
 
 /// used to categorize a striple and its associated scheme
 /// for exemple a struct can be convert to two striple :
 ///
 /// fn<T : StripleKind> as_striple (user : &User) -> Striple<T>{...}
-///
+/// Sized to 0 (usage of phantomdata)
 pub trait StripleKind : Debug + Clone {
   type D : IDDerivation;
   type S : SignatureScheme;
@@ -179,7 +232,6 @@ pub trait OwnedStripleIf<T : StripleKind> : StripleIf<T> {
 impl<'a, T : StripleKind, ST : StripleIf<T>> StripleIf<T> for (&'a ST, &'a [u8]) {
   #[inline]
   fn striple_ser (&self) -> Vec<u8> {
-    // TODO complete with scheme for file as this is false and incomplete
     self.0.striple_ser()
   }
   #[inline]
@@ -216,6 +268,59 @@ impl<'a, T : StripleKind, ST : StripleIf<T>> StripleIf<T> for (&'a ST, &'a [u8])
   }
 }
 
+impl<T : StripleKind, ST : StripleIf<T>> StripleIf<T> for (ST, Vec<u8>) {
+  #[inline]
+  fn striple_ser (&self) -> Vec<u8> {
+    self.0.striple_ser()
+  }
+  #[inline]
+  fn get_key(&self) -> &[u8] {
+    self.0.get_key()
+  }
+  #[inline]
+  fn get_sig(&self) -> &[u8] {
+    self.0.get_sig()
+  }
+  #[inline]
+  fn get_id(&self) -> &[u8] {
+    self.0.get_id()
+  }
+  #[inline]
+  fn get_about(&self) -> &[u8] {
+    self.0.get_about()
+  }
+  #[inline]
+  fn get_from(&self) -> &[u8] {
+    self.0.get_from()
+  }
+  #[inline]
+  fn get_content(&self) -> &[u8] {
+    self.0.get_content()
+  }
+   #[inline]
+  fn get_content_ids(&self) -> Vec<&[u8]> {
+    self.0.get_content_ids()
+  }
+  #[inline]
+  fn get_tosig(&self) -> Vec<u8> {
+    self.0.get_tosig()
+  }
+}
+
+impl<T : StripleKind, ST : StripleIf<T>> OwnedStripleIf<T> for (ST, Vec<u8>) {
+
+  #[inline]
+  fn private_key (&self) -> Vec<u8> {
+    self.1.clone()
+  }
+
+  #[inline]
+  fn private_key_ref<'a> (&'a self) -> &'a[u8] {
+    &self.1[..]
+  }
+
+}
+
 impl<'b, T : StripleKind, ST : StripleIf<T>> OwnedStripleIf<T> for (&'b ST, &'b [u8]) {
 
   #[inline]
@@ -229,6 +334,7 @@ impl<'b, T : StripleKind, ST : StripleIf<T>> OwnedStripleIf<T> for (&'b ST, &'b 
   }
 
 }
+
 
 /// Type to use an striple as Public, allowing to sign/create striple from it without others info
 /// (see Ownedstriple implementation). Usage with non public striple will result in error when
@@ -301,9 +407,9 @@ impl<'b, T : StripleKind, ST : StripleIf<T> + 'b> OwnedStripleIf<T> for PubStrip
 pub struct Striple<T : StripleKind> {
   /// id of the striple defining the encoding of the content
   /// optional (null vec otherwhise)
-  contentenc : Vec<u8>,
+  pub contentenc : Vec<u8>,
   /// id of the striple
-  id : Vec<u8>,
+  pub id : Vec<u8>,
   /// id of from striple
   from : Vec<u8>,
   /// signature of the striple (by its `from` striple)
@@ -464,7 +570,7 @@ impl<T : StripleKind> StripleIf<T> for Striple<T> {
     if self.about.len() > 0 {
       &self.about
     } else {
-      &self.from
+      &self.id
     }
   }
   #[inline]
@@ -514,7 +620,7 @@ impl<'a,T : StripleKind> StripleIf<T> for StripleRef<'a,T> {
     if self.about.len() > 0 {
       self.about
     } else {
-      self.from
+      self.id
     }
   }
   #[inline]
@@ -530,13 +636,23 @@ impl<'a,T : StripleKind> StripleIf<T> for StripleRef<'a,T> {
     res
   }
 
-  /// decode from bytes
-  /// TODO better error management
-  fn striple_dser<'b, FK : StripleKind, FS : StripleIf<FK>>  (bytes : &'b[u8], docheck : Option<&FS>) -> Result<StripleRef<'b,T>, Error> {
+
+
+}
+
+impl<'a,T : StripleKind> StripleRef<'a,T> {
+  /// decode from bytes, with possible signing validation
+  /// Deserialize does not result in StripleIf, because StripleIf is use to allow reference to
+  /// existing structure and adding content to a structure and still being an StripleIf, yet
+  /// deserialize as a library item is only here to enforce encoding of striple : 
+  /// to use on other structure deserialize must be use by a more general
+  /// deserialize primitive or if particular non striple encoding (in json for instance), the
+  /// resulting struct will use AsStriple (probably to stripleref) to use striple primitive.
+  pub fn striple_dser<'b, FK : StripleKind, FS : StripleIf<FK>>  (bytes : &'b[u8], docheck : Option<&FS>) -> Result<StripleRef<'b,T>, Error> {
     let mut ix = 0;
     let algoenc = read_id (bytes, &mut ix);
-    if algoenc != <T as StripleKind>::get_algo_key() {
-      return Err(("Bad algo kind for this type of striple".to_string(), ErrorKind::UnexpectedStriple))
+    if algoenc != <T as StripleKind>::get_algo_key() && <T as StripleKind>::get_algo_key() != NOKEY {
+      return Err(Error("Bad algo kind for this type of striple".to_string(), ErrorKind::UnexpectedStriple))
     };
     let contentenc = read_id (bytes, &mut ix); 
     let id = read_id (bytes, &mut ix);
@@ -558,7 +674,7 @@ impl<'a,T : StripleKind> StripleIf<T> for StripleRef<'a,T> {
 
     let mut about = read_id (bytes, &mut ix);
     if about.len() == 0 {
-      about = from;
+      about = id;
     };
 
     let s = xtendsizedec(bytes, &mut ix, 2);
@@ -585,18 +701,18 @@ impl<'a,T : StripleKind> StripleIf<T> for StripleRef<'a,T> {
 
     if ix != bytes.len() {
       debug!("strip or {:?} - {:?}", ix, bytes.len());
-      return Err(("Mismatch size of striple".to_string(), ErrorKind::DecodingError))
+      return Err(Error("Mismatch size of striple".to_string(), ErrorKind::DecodingError))
     }
 
     let checkerror : Option<Error>= docheck.and_then(|fromst|{
       if fromst.get_id() != &from[..] {
-        return Some(("Unexpected from id".to_string(), ErrorKind::UnexpectedStriple))
+        return Some(Error("Unexpected from id".to_string(), ErrorKind::UnexpectedStriple))
       };
       let content = &bytes[startcontent .. bytes.len()];
       if !(
          <FK::D as IDDerivation>::check_id_derivation(sig,id) &&
          <FK::S as SignatureScheme>::check_content(fromst.get_key(), content, sig)) {
-        return Some(("Invalid signature or key derivation".to_string(), ErrorKind::UnexpectedStriple))
+        return Some(Error("Invalid signature or key derivation".to_string(), ErrorKind::UnexpectedStriple))
       };
       None
     });
@@ -610,7 +726,7 @@ impl<'a,T : StripleKind> StripleIf<T> for StripleRef<'a,T> {
     || from.len() == 0 
     || (contentids.len() == 0 && content.len() == 0)
     {
-      Err(("Invalid striple decoding".to_string(), ErrorKind::DecodingError))
+      Err(Error("Invalid striple decoding".to_string(), ErrorKind::DecodingError))
     } else {
       Ok(StripleRef{
         contentenc : contentenc,
@@ -627,14 +743,12 @@ impl<'a,T : StripleKind> StripleIf<T> for StripleRef<'a,T> {
     }
   }
  
-
 }
-
 
 /// Trait for structure that could be use as an striple.
 /// A structure can contain multiple striple, that is why the trait is parametric.
 /// TODO user example
-trait AsStriple<'a, T : StripleKind>  {
+pub trait AsStriple<'a, T : StripleKind>  {
   type Target : StripleIf<T>;
   fn as_striple(&'a self) -> Self::Target;
 }
@@ -703,7 +817,7 @@ impl<T : StripleKind> Decodable for Striple<T> {
     // Dummy type
     let typednone : Option<&Striple<T>> = None;
     tmpres.and_then(|vec| 
-      Self::striple_dser(&vec, typednone).map(|r|r.as_striple()).map_err(|err|
+      StripleRef::striple_dser(&vec, typednone).map(|r|r.as_striple()).map_err(|err|
         d.error(&format!("{:?}",err))
       )
     )
@@ -711,8 +825,28 @@ impl<T : StripleKind> Decodable for Striple<T> {
 }
 
 /// striple Error type TODO impl Display trait
-pub type Error = (String, ErrorKind);
+#[derive(Debug)]
+pub struct Error(String, ErrorKind);
 
+impl ErrorTrait for Error {
+  
+  fn description(&self) -> &str {
+    &self.0
+  }
+  // TODO store cause and constructor with cause
+  fn cause(&self) -> Option<&ErrorTrait> {
+    None
+  }
+}
+impl Display for Error {
+  fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
+    let kind = format!("{:?} : ",self.1);
+    ftr.write_str(&kind);
+    ftr.write_str(&self.0);
+    Ok(())
+
+  }
+}
 
 /// tool function to convert a length in striple xtendedlength encoding
 /// firt parameter is the value and second is initial number of bytes
@@ -751,6 +885,10 @@ pub fn xtendsize(l : usize, nbbyte : usize) -> Vec<u8> {
 /// bytes at a certain position for a designed size.
 /// The function update index value
 pub fn xtendsizedec(bytes : &[u8], ix : &mut usize, nbbyte : usize) -> usize {
+  if bytes.len() < *ix + 1 {
+    return 0;
+  };
+ 
   let mut res : usize = 0;
   let mut nbbytes = nbbyte;
   let mut idx = *ix;
@@ -759,7 +897,7 @@ pub fn xtendsizedec(bytes : &[u8], ix : &mut usize, nbbyte : usize) -> usize {
   while bytes[idx] > 127 {
     // first byte minus its first bit
     adj_ix += (bytes[idx] ^ 128).to_usize().unwrap();
-    println!("adjix {:?} !!!",adj_ix);
+    debug!("adjix {:?} !!!",adj_ix);
     nbbytes += adj_ix;
     idx += 1;
   }
@@ -783,6 +921,51 @@ pub fn xtendsizedec(bytes : &[u8], ix : &mut usize, nbbyte : usize) -> usize {
   *ix = idx + nbbytes;
   res
 }
+
+/// xtendsizedec for a reader TODO keep only one
+pub fn xtendsizeread<R : Read>(r : &mut R, nbbyte : usize) -> IOResult<usize> {
+  if nbbyte == 0 {
+    return Ok(0);
+  };
+  let mut res : usize = 0;
+  let mut nbbytes = nbbyte;
+  let mut buf = vec![0; nbbytes];
+  try!(r.read(&mut buf));
+  let mut adj_ix = 0;
+  // read value
+  while buf[adj_ix] > 127 {
+    // first byte minus its first bit
+    let addbytes = (buf[0] ^ 128).to_usize().unwrap();
+    adj_ix +=1;
+    // TODO test with reserve_exact
+    buf.push_all(&vec![0; 1 + addbytes]);
+    let nbread = try!(r.read(&mut buf[ nbbytes..]));
+    if nbread != 1 + addbytes {
+      // TODO switch to errror and rewrite test
+      return Ok(0);
+    };
+    nbbytes =  nbbytes + addbytes;
+  }
+  res = unsafe {
+  let mut v : [u8;8] = mem::transmute(0usize);
+  debug!("DEBUG_bef {:?}, {:?} !!!",v, nbbytes);
+  if nbbytes <= 8 {
+    copy_nonoverlapping(buf[adj_ix..].as_ptr(),v[8-nbbytes..].as_mut_ptr(),nbbytes);
+    debug!("DEBUG_aft {:?} !!!",v);
+    if cfg!(target_endian = "little") {
+      usize::from_be(mem::transmute(v))
+    } else {
+      mem::transmute(v)
+    }
+  } else {
+    // size to big for usize TODO maybe change xtendsize to bigint
+    // TODO change to error at least + half size lost here
+    0
+  }
+  };
+  Ok(res)
+}
+
 
 // get nbbyte for a value
 // TODO precalc iteration in table
@@ -827,6 +1010,21 @@ fn test_xtendsizedec () {
 }
 
 #[test]
+fn test_xtendsizeread () {
+  assert_eq!(xtendsizeread(&mut Cursor::new(&[4,4][..]),0).unwrap(),0);
+  assert_eq!(xtendsizeread(&mut Cursor::new(&[0,4][..]),1).unwrap(),0);
+  assert_eq!(xtendsizeread(&mut Cursor::new(&[127,0,4][..]),1).unwrap(),127);
+  assert_eq!(xtendsizeread(&mut Cursor::new(&[129,0,128][..]),1).unwrap(),128);
+  assert_eq!(xtendsizeread(&mut Cursor::new(&[1,101,4][..]),2).unwrap(),357);
+  assert_eq!(xtendsizeread(&mut Cursor::new(&[129,1,101][..]),1).unwrap(),357);
+  assert_eq!(xtendsizeread(&mut Cursor::new(&[130,5,114,136][..]),1).unwrap(),357000);
+  // overflow is same as 0 (bad)
+  assert_eq!(xtendsizeread(&mut Cursor::new(&[130,136,114][..]),1).unwrap(),0);
+}
+
+
+
+#[test]
 fn test_readwriteid () {
   let id_1 : Vec<u8> = vec!(1,2,3,4,5);
   let id_2 : Vec<u8> = vec!(11,12,13);
@@ -866,10 +1064,86 @@ pub fn read_id<'a> (bytes : &'a[u8], ix : &mut usize) -> &'a[u8] {
 pub enum ErrorKind {
   DecodingError,
   UnexpectedStriple,
+  KindImplementationNotFound,
 }
 
 // feature related implementation of serialize (using standard ser meth of striple) : to avoid
 // redundant def (type alias...).
+
+
+#[derive(Debug,Clone)]
+/// Utility kind (mostly when deserializing), to get invalid striple (striple without a kind)
+pub struct NoKind;
+#[derive(Debug,Clone)]
+pub struct NoIDDer;
+#[derive(Debug,Clone)]
+pub struct NoSigCh;
+impl StripleKind for NoKind {
+  type D = NoIDDer;
+  type S = NoSigCh;
+  #[inline]
+  fn get_algo_key() -> &'static [u8] {
+    NOKEY
+  }
+}
+impl IDDerivation for NoIDDer {
+  fn derive_id(_ : &[u8]) -> Vec<u8> {
+    vec!()
+  }
+  fn check_id_derivation(_ : &[u8], _ : &[u8]) -> bool {
+    false
+  }
+
+}
+impl SignatureScheme for NoSigCh {
+  fn sign_content(_ : &[u8], _ : &[u8]) -> Vec<u8> {
+    vec!()
+  }
+  fn check_content(publ : &[u8],_ : &[u8],_ : &[u8]) -> bool {
+    false
+  }
+  fn new_keypair() -> (Vec<u8>, Vec<u8>) {
+    (vec!(), vec!())
+  }
+}
+
+#[inline]
+/// NoKind striple could be set a kind (unsafe cast but kind is phantom data)
+pub fn as_kind<'a, K : StripleIf<NoKind>, SK : StripleKind, S : StripleIf<SK>> (nk : &'a K) -> &'a S {
+  unsafe {
+    let ptr = nk as *const K;
+    let sptr : *const S = mem::transmute(ptr);
+    sptr.as_ref().unwrap()
+  }
+}
+#[inline]
+/// NoKind striple could be set a kind (unsafe cast but kind is phantom data)
+pub fn mut_as_kind<'a, K : StripleIf<NoKind>, SK : StripleKind, S : StripleIf<SK>> (nk : &'a mut K) -> &'a mut S {
+  unsafe {
+    let mut ptr = nk as *mut K;
+    let mut sptr : *mut S = mem::transmute(ptr);
+    sptr.as_mut().unwrap()
+  }
+}
+
+#[inline]
+/// NoKind striple could be set a kind (unsafe cast but kind is phantom data)
+pub fn copy_as_kind<K : StripleIf<NoKind>, SK : StripleKind, S : StripleIf<SK>> (nk : &K) -> S {
+  unsafe {
+    mem::transmute_copy(nk)
+  }
+
+}
+
+#[inline]
+/// NoKind striple could be set a kind (unsafe cast but kind is phantom data)
+pub fn copy_as_kind2<K : StripleIf<NoKind>, SK : StripleKind, S : StripleIf<SK>> (nk : K) -> S {
+  unsafe {
+    mem::transmute_copy(&nk)
+  }
+
+}
+
 
 #[cfg(test)]
 pub mod test {
@@ -877,9 +1151,13 @@ pub mod test {
   use self::rand::Rng;
   use std::marker::PhantomData;
   use striple::Striple;
+  use striple::StripleRef;
   use striple::StripleIf;
   use striple::AsStriple;
   use striple::StripleKind;
+  use striple::NoKind;
+  use striple::as_kind;
+  use striple::mut_as_kind;
   use striple::IDDerivation;
   use striple::SignatureScheme;
 
@@ -931,13 +1209,9 @@ pub mod test {
     }
   }
 
-
-
-  #[test]
-  fn test_striple_enc_dec () {
+  pub fn sampleStriple1() -> Striple<NoKind> {
     let common_id = random_bytes(4);
     let common_id_2 = random_bytes(2);
-    let ori_1 : Striple<TestKind1> = 
     Striple {
         contentenc : vec!(),
         id : common_id.clone(),
@@ -949,25 +1223,41 @@ pub mod test {
         content : vec!(),
 
         phtype : PhantomData,
-    };
-    let ori_2 : Striple<TestKind1> = 
+    }
+  }
+  pub fn sampleStriple2() -> Striple<NoKind> {
+    let common_id = random_bytes(4);
+    let common_id_2 = random_bytes(2);
     Striple {
         contentenc : vec!(),
         id : common_id_2.clone(),
-        from : vec!(),
+        from : vec!(4,4,4,4),
         sig : common_id_2.clone(),
         about : vec!(),
         key : vec!(0),
         contentids : vec!(),
-        content : vec!(),
+        content : vec!(33,45,123),
 
         phtype : PhantomData,
-    };
+
+    }
+  }
+
+  #[test]
+  fn test_striple_enc_dec () {
+    let common_id_2 = random_bytes(2);
+//pub fn as_kind<'a, K : StripleIf<NoKind>, SK : StripleKind, S : StripleIf<SK>> (nk : &'a K) -> &'a S {
+    let ori_1tmp = sampleStriple1();
+    let mut ori_2tmp = sampleStriple2();
+    let ori_1 : &Striple<TestKind1> = as_kind(&ori_1tmp);
+    let ori_2 : &mut Striple<TestKind1> = mut_as_kind(&mut ori_2tmp);
+    ori_2.id = ori_1.from.clone();
+    ori_2.sig = ori_1.from.clone();
     let ori_ref_1 = ori_1.as_striple();
     let encori_1 = ori_1.striple_ser();
     debug!("Encoded : \n{:?}",encori_1);
     let typednone : Option<&Striple<TestKind1>> = Some(&ori_2);
-    let dec1_ref = Striple::striple_dser(&encori_1, typednone).unwrap();
+    let dec1_ref = StripleRef::striple_dser(&encori_1, typednone).unwrap();
     let dec1 : Striple<TestKind1> = dec1_ref.as_striple();
     assert_eq!(compare_striple(&ori_1,&dec1), true);
     let encori_ref_1 = ori_ref_1.striple_ser();
@@ -1230,7 +1520,7 @@ pub mod test {
   }
 
   // utility
-  fn random_bytes(size : usize) -> Vec<u8> {
+  pub fn random_bytes(size : usize) -> Vec<u8> {
     let mut rng = rand::thread_rng();
     let mut bytes = vec![0; size];
     rng.fill_bytes(&mut bytes);
@@ -1251,8 +1541,8 @@ pub mod test {
       )
     && (
       st1.about == st2.about ||
-      (st1.about.len() == 0 && st1.from == st2.about) ||
-      (st2.about.len() == 0 && st2.from == st1.about)
+      (st1.about.len() == 0 && st1.id == st2.about) ||
+      (st2.about.len() == 0 && st2.id == st1.about)
       )
     && st1.key == st2.key
     && st1.contentids == st2.contentids
@@ -1261,5 +1551,62 @@ pub mod test {
 
 }
 
+pub struct StripleDisp<'a,K : StripleKind, S : 'a + StripleIf<K>>(pub &'a S,pub PhantomData<K>);
+pub struct OwnedStripleDisp<'a,K : StripleKind, S : 'a + OwnedStripleIf<K>>(pub &'a S, pub PhantomData<K>);
+// TODO mark as rust unsafe?? (more lib unsafe)
+pub struct UnsafeOwnedStripleDisp<'a,K : StripleKind, S : 'a + OwnedStripleIf<K>>(pub &'a S, pub PhantomData<K>);
 
+
+
+
+#[cfg(feature="serialize")]
+impl<'a, K : StripleKind, S : StripleIf<K>> Display for StripleDisp<'a, K, S> {
+  fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
+    ftr.debug_struct("")
+    .field("id", &self.0.get_id().to_base64(base64conf))
+    .field("from", &self.0.get_from().to_base64(base64conf))
+    .field("about", &self.0.get_about().to_base64(base64conf))
+    .field("content_ids", &{
+      let mut catids = "[".to_string();
+      for id in self.0.get_content_ids().iter() {
+        catids = catids + &id.to_base64(base64conf)[..] + ",";
+      }
+      catids + "]"
+      }
+    )
+    .field("content", &self.0.get_content().to_base64(base64conf))
+    .field("sig", &self.0.get_sig().to_base64(base64conf))
+    .field("kind ", &self.0.get_algo_key().to_base64(base64conf))
+    .finish()
+
+  }
+}
+
+#[cfg(feature="serialize")]
+impl<'a,K : StripleKind, S : OwnedStripleIf<K>> Display  for OwnedStripleDisp<'a,K,S> {
+  fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
+    ftr.debug_struct("")
+    .field("striple", &format!("{}",StripleDisp(self.0, PhantomData)))
+    .field("PrivateKey", &"********")
+    .finish()
+ 
+  }
+}
+#[cfg(feature="serialize")]
+impl<'a,K : StripleKind, S : OwnedStripleIf<K>> Display  for UnsafeOwnedStripleDisp<'a,K,S> {
+  fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
+    ftr.debug_struct("")
+    .field("striple", &format!("{}",StripleDisp(self.0, PhantomData)))
+    .field("PrivateKey", &self.0.private_key_ref().to_base64(base64conf))
+    .finish()
+  }
+}
+
+#[cfg(feature="serialize")]
+pub static base64conf : base64::Config = base64::Config {
+    char_set : base64::CharacterSet::Standard,
+    newline : base64::Newline::LF,
+    pad : true,
+    line_length : None,
+};
 
