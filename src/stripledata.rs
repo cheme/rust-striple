@@ -6,7 +6,7 @@
 
 use striple::Striple;
 use striple::{StripleKind,NoKind};
-use striple::{StripleIf,StripleDisp};
+use striple::{StripleIf};
 use striple::{OwnedStripleIf,UnsafeOwnedStripleDisp};
 use std::marker::PhantomData;
 

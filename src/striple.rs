@@ -330,86 +330,23 @@ impl<'b, ST : StripleIf> OwnedStripleIf for (&'b ST, &'b [u8]) {
 /// signing or worst when checking.
 /// TODO reset a constraint to ensure public scheme : for instance define publicstripleif for
 /// constraint !! maybe replace by trait
-pub struct PubStriple<'a, ST : StripleIf + 'a> (&'a ST);
+pub trait PubStriple : StripleIf{}
 
-/// use as PubStriple
-#[inline]
-pub fn striple_as_public<'a, ST : StripleIf> (st : &'a ST) -> PubStriple<'a, ST>  {
-  PubStriple(st)
-}
+impl<K : StripleKind> PubStriple for Striple<K> where K::S : PublicScheme {}
+impl<'a, K : StripleKind> PubStriple for StripleRef<'a,K> where K::S : PublicScheme {}
 
-impl<'b, ST : StripleIf + 'b> StripleIf for PubStriple<'b, ST> {
-  #[inline]
-  fn get_algo_key(&self) -> &'static [u8]{
-    self.0.get_algo_key()
-  }
-  #[inline]
-  fn check_content(&self, cont : &[u8],sig : &[u8]) -> bool {
-    self.0.check_content(cont, sig)
-  }
-  #[inline]
-  fn sign_content(&self, pri : &[u8], con : &[u8]) -> Vec<u8> {
-    self.0.sign_content(pri, con)
-  }
-  #[inline]
-  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> bool {
-    self.0.check_id_derivation(sig,id)
-  }
-   #[inline]
-  fn derive_id(&self, sig : &[u8]) -> Vec<u8> {
-    self.0.derive_id(sig)
-  }
- 
-  #[inline]
-  fn striple_ser (&self) -> Vec<u8> {
-    self.0.striple_ser()
-  }
-  #[inline]
- fn get_key(&self) -> &[u8] {
-    self.0.get_key()
-  }
-  #[inline]
-  fn get_sig(&self) -> &[u8] {
-    self.0.get_sig()
-  }
-  #[inline]
-  fn get_id(&self) -> &[u8] {
-    self.0.get_id()
-  }
-  #[inline]
-  fn get_about(&self) -> &[u8] {
-    self.0.get_about()
-  }
-   #[inline]
-  fn get_from(&self) -> &[u8] {
-    self.0.get_from()
-  }
-  #[inline]
-  fn get_content(&self) -> &[u8] {
-    self.0.get_content()
-  }
-   #[inline]
-  fn get_content_ids(&self) -> Vec<&[u8]> {
-    self.0.get_content_ids()
-  }
- 
-  #[inline]
-  fn get_tosig(&self) -> Vec<u8> {
-    self.0.get_tosig()
-  }
-}
+
 
 /// public scheme uses same value for public and private key
-impl<'b, ST : StripleIf + 'b> OwnedStripleIf for PubStriple<'b, ST> {
+impl<S : PubStriple> OwnedStripleIf for S {
 
   fn private_key (&self) -> Vec<u8> {
-    self.0.get_key().to_vec()
+    self.get_key().to_vec()
   }
 
   fn private_key_ref<'a> (&'a self) -> &'a[u8] {
-    self.0.get_key()
+    self.get_key()
   }
-
 }
 
 /// Striple struct object to manipulate an striple
@@ -1137,6 +1074,8 @@ pub struct NoKind;
 pub struct NoIDDer;
 #[derive(Debug,Clone)]
 pub struct NoSigCh;
+
+impl PublicScheme for NoSigCh {}
 impl StripleKind for NoKind {
   type D = NoIDDer;
   type S = NoSigCh;
@@ -1193,6 +1132,33 @@ pub fn copy_as_kind< SK : StripleKind> (nk : &Striple<NoKind>) -> Striple<SK> {
   }
 
 }
+#[inline]
+/// NoKind striple could be set a kind (unsafe cast but kind is phantom data)
+pub fn ref_as_kind<'a, SK : StripleKind> (nk : &'a StripleRef<'a,NoKind>) -> &'a StripleRef<'a,SK> {
+  unsafe {
+    let ptr = nk as *const StripleRef<'a,NoKind>;
+    let sptr : *const StripleRef<'a,SK> = mem::transmute(ptr);
+    sptr.as_ref().unwrap()
+  }
+}
+#[inline]
+/// NoKind striple could be set a kind (unsafe cast but kind is phantom data)
+pub fn ref_mut_as_kind<'a,  SK : StripleKind> (nk : &'a mut StripleRef<'a, NoKind>) -> &'a mut StripleRef<'a,SK> {
+  unsafe {
+    let mut ptr = nk as *mut StripleRef<'a,NoKind>;
+    let mut sptr : *mut StripleRef<'a,SK> = mem::transmute(ptr);
+    sptr.as_mut().unwrap()
+  }
+}
+
+#[inline]
+/// NoKind striple could be set a kind (unsafe cast but kind is phantom data)
+pub fn ref_copy_as_kind<'a, SK : StripleKind> (nk : &StripleRef<'a,NoKind>) -> StripleRef<'a,SK> {
+  unsafe {
+    mem::transmute_copy(nk)
+  }
+}
+
 
 
 #[cfg(test)]
@@ -1625,6 +1591,7 @@ impl<'a,  S : StripleIf> Display for StripleDisp<'a, S> {
       }
     )
     .field("content", &self.0.get_content().to_base64(base64conf))
+    .field("key", &self.0.get_key().to_base64(base64conf))
     .field("sig", &self.0.get_sig().to_base64(base64conf))
     .field("kind ", &self.0.get_algo_key().to_base64(base64conf))
     .finish()

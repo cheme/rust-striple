@@ -16,7 +16,7 @@ use striple::striple::{xtendsize,xtendsizeread,read_id,push_id};
 use striple::stripledata;
 use striple::stripledata::{BaseStriples,KindStriples};
 use std::marker::PhantomData;
-use striple::storage::{write_striple,NoCypher,StorageCypher, MaybeOwnedStriple};
+use striple::storage::{write_striple,NoCypher,StorageCypher};
 #[cfg(feature="public_crypto")]
 use striple::striple_kind::public::crypto::PubRipemd;
 #[cfg(feature="public_openssl")]
@@ -39,27 +39,26 @@ fn main() {
   let cypher = NoCypher;
   datafile.write(&NoCypher::get_cypher_header()).unwrap();
   printlog(&pribase,&prikinds,&pubstriples);
-  //write_striple::<_,_,(Striple<NoKind>,Vec<u8>),_>(&cypher,&MaybeOwnedStriple::Owned(pribase.root,PhantomData),&mut datafile).unwrap();
   
   let baseId = get_base_id(&prikinds);
   println!("base : {:?}",baseId);
   let kindId = get_kind_id(&prikinds);
   println!("base : {:?}",kindId);
-  write_striple_with_enc::<_,Striple<NoKind>,_>(&cypher,&MaybeOwnedStriple::Owned(pribase.root),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc::<_,Striple<NoKind>,_>(&cypher,&MaybeOwnedStriple::Owned(pribase.libcat),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc::<_,Striple<NoKind>,_>(&cypher,&MaybeOwnedStriple::Owned(pribase.libkind),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc::<_,Striple<NoKind>,_>(&cypher,&MaybeOwnedStriple::Owned(prikinds.kind),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc::<_,Striple<NoKind>,_>(&cypher,&MaybeOwnedStriple::Owned(prikinds.pubripemd),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc::<_,Striple<NoKind>,_>(&cypher,&MaybeOwnedStriple::Owned(prikinds.pubsha512),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc::<_,Striple<NoKind>,_>(&cypher,&MaybeOwnedStriple::Owned(prikinds.pubsha256),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc::<_,Striple<NoKind>,_>(&cypher,&MaybeOwnedStriple::Owned(prikinds.rsa2048Sha512),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc::<_,Striple<NoKind>,_>(&cypher,&MaybeOwnedStriple::Owned(prikinds.ecdsaripemd160),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc::<_,_,(Striple<NoKind>,Vec<u8>)>(&cypher,&MaybeOwnedStriple::NoOwn(pubstriples.kind),&mut datafile, &kindId).unwrap();
-  write_striple_with_enc::<_,_,(Striple<NoKind>,Vec<u8>)>(&cypher,&MaybeOwnedStriple::NoOwn(pubstriples.pubripemd),&mut datafile, &kindId).unwrap();
-  write_striple_with_enc::<_,_,(Striple<NoKind>,Vec<u8>)>(&cypher,&MaybeOwnedStriple::NoOwn(pubstriples.pubsha512),&mut datafile, &kindId).unwrap();
-  write_striple_with_enc::<_,_,(Striple<NoKind>,Vec<u8>)>(&cypher,&MaybeOwnedStriple::NoOwn(pubstriples.pubsha256),&mut datafile, &kindId).unwrap();
-  write_striple_with_enc::<_,_,(Striple<NoKind>,Vec<u8>)>(&cypher,&MaybeOwnedStriple::NoOwn(pubstriples.rsa2048Sha512),&mut datafile, &kindId).unwrap();
-  write_striple_with_enc::<_,_,(Striple<NoKind>,Vec<u8>)>(&cypher,&MaybeOwnedStriple::NoOwn(pubstriples.ecdsaripemd160),&mut datafile, &kindId).unwrap();
+  write_striple_with_enc(&cypher,&pribase.root.0,Some(&pribase.root.1),&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&pribase.libcat.0,Some(&pribase.libcat.1),&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&pribase.libkind.0,Some(&pribase.libkind.1),&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.kind.0,Some(&prikinds.kind.1),&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.pubripemd.0,Some(&prikinds.pubripemd.1),&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.pubsha512.0,Some(&prikinds.pubsha512.1),&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.pubsha256.0,Some(&prikinds.pubsha256.1),&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.rsa2048Sha512.0,Some(&prikinds.rsa2048Sha512.1),&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.ecdsaripemd160.0,Some(&prikinds.ecdsaripemd160.1),&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.kind,None,&mut datafile, &kindId).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.pubripemd,None,&mut datafile, &kindId).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.pubsha512,None,&mut datafile, &kindId).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.pubsha256,None,&mut datafile, &kindId).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.rsa2048Sha512,None,&mut datafile, &kindId).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.ecdsaripemd160,None,&mut datafile, &kindId).unwrap();
 
 
 }
@@ -86,7 +85,7 @@ fn printlog<K1 : StripleKind, K2 : StripleKind> (pribase : &BaseStriples<K1>, pr
 #[cfg(feature="public_openssl")]
 fn kind_gen<K : StripleKind>(pri : &BaseStriples<K>) -> Option<KindStriples<PubSha512>> {
   println!("Generating public sha512 base with openssl dependancy");
-  gen_pub::<PubSha512,K>(pri,"Striple Lib Public Kind".to_string())
+  gen_kind::<PubSha512,K>(pri,"Striple Lib Public Kind".to_string())
 }
 #[cfg(feature="public_openssl")]
 fn get_kind_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
@@ -107,7 +106,7 @@ fn get_base_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
 #[cfg(feature="public_crypto")]
 fn kind_gen<K : StripleKind>(pri : &BaseStriples<K>) -> Option<KindStriples<PubRipemd>> {
   println!("Generating public ripemd160 base with rust-crypto dependancy");
-  gen_pub::<PubRipemd,K>(pri,"Striple Lib Public Kind".to_string());
+  gen_kind::<PubRipemd,K>(pri,"Striple Lib Public Kind".to_string());
 }
 
 #[cfg(not(feature="public_openssl"))]
@@ -191,13 +190,13 @@ fn gen_pri<K : StripleKind>() -> Option<(BaseStriples<K>,KindStriples<K>)> {
     libcat : ownedCat,
     libkind : ownedKind,
   };
-  let kinds = gen_pub(&base, "Striple Lib Verified Kind".to_string());
+  let kinds = gen_kind(&base, "Striple Lib Verified Kind".to_string());
 
   Some ((base,kinds.unwrap()))
 }
 
-fn gen_pub<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel : String) -> Option<KindStriples<K>> {
-//fn gen_pub<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel : String) -> Option<KindStriples<K>>  where K::S : PublicScheme {
+fn gen_kind<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel : String) -> Option<KindStriples<K>> {
+//fn gen_kind<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel : String) -> Option<KindStriples<K>>  where K::S : PublicScheme {
 
  let ownedVKind : (Striple<K>, Vec<u8>) = Striple::new(
     vec!(),
@@ -258,15 +257,14 @@ fn gen_pub<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel 
 pub fn write_striple_with_enc
   <SC : StorageCypher, 
    S  : StripleIf,
-   OS : OwnedStripleIf,
-    > (cypher : & SC, striple : &MaybeOwnedStriple<OS,S>,  dest : &mut File, enc : &[u8]) -> IoResult<()> {
+    > (cypher : & SC, striple : &S, pkey : Option<&[u8]>, dest : &mut File, enc : &[u8]) -> IoResult<()> {
  
 //  write_striple(cypher,striple,dest)
 
   let mut tmpvec : Vec<u8> = Vec::new();
   let mut buf = &mut Cursor::new(tmpvec);
 
-  try!(write_striple(cypher,striple,buf));
+  try!(write_striple(cypher,striple,pkey,buf));
 
 
   try!(buf.seek(SeekFrom::Start(0)));
