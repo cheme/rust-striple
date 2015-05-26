@@ -10,21 +10,21 @@ use striple::Error as StripleError;
 use std::ptr::copy_nonoverlapping;
 
 #[derive(Debug)]
-pub enum MaybeOwnedStriple<SK : StripleKind, OS : OwnedStripleIf<SK>, S : StripleIf<SK>> {
-  Owned(OS,PhantomData<SK>),
-  NoOwn(S,PhantomData<SK>),
+pub enum MaybeOwnedStriple<OS : OwnedStripleIf, S : StripleIf> {
+  Owned(OS),
+  NoOwn(S),
 }
 
-impl<SK : StripleKind, OS : OwnedStripleIf<SK>, S : StripleIf<SK>>  MaybeOwnedStriple<SK, OS, S> {
+impl<OS : OwnedStripleIf, S : StripleIf>  MaybeOwnedStriple<OS, S> {
   pub fn getOwned(self) -> Option<OS> {
     match self {
-      MaybeOwnedStriple::Owned(s,_) => Some(s),
+      MaybeOwnedStriple::Owned(s) => Some(s),
       _ => None,
     }
   }
   pub fn getNoOwn(self) -> Option<S> {
     match self {
-      MaybeOwnedStriple::NoOwn(s,_) => Some(s),
+      MaybeOwnedStriple::NoOwn(s) => Some(s),
       _ => None,
     }
   }
@@ -60,21 +60,20 @@ impl StorageCypher for NoCypher {
 
 pub fn write_striple
   <SC : StorageCypher, 
-   SK : StripleKind,
-   S  : StripleIf<SK>,
-   OS : OwnedStripleIf<SK>,
+   S  : StripleIf,
+   OS : OwnedStripleIf,
    W  : Write,
-    > (cypher : & SC, striple : &MaybeOwnedStriple<SK,OS,S>,  dest : &mut W) -> Result<()> {
+    > (cypher : & SC, striple : &MaybeOwnedStriple<OS,S>,  dest : &mut W) -> Result<()> {
       // Tag as normal writing
       dest.write(&[0]);
       let menc = match striple {
-        &MaybeOwnedStriple::Owned(ref s,_) => {
+        &MaybeOwnedStriple::Owned(ref s) => {
           let encprikey = cypher.encrypt(&s.private_key());
           try!(dest.write(&xtendsize(encprikey.len(),2)));
           try!(dest.write(&encprikey));
           Ok(s.striple_ser())
         },
-        &MaybeOwnedStriple::NoOwn(ref s,_) => {
+        &MaybeOwnedStriple::NoOwn(ref s) => {
           try!(dest.write(&xtendsize(0,2)));
           Ok(s.striple_ser())
         },
@@ -86,13 +85,13 @@ pub fn write_striple
       })
 }
 
-// TODO switch to striple error
+// TODO switch to striple error + fn gen to StripleImpl
 pub fn read_striple 
   <SC : StorageCypher, 
    SK : StripleKind,
    T  : StripleKind,
    R  : Read,
-    > (cypher : &SC, from : &mut R) -> Result<MaybeOwnedStriple<SK,(Striple<SK>,Vec<u8>),Striple<SK>>> {
+    > (cypher : &SC, from : &mut R) -> Result<MaybeOwnedStriple<(Striple<SK>,Vec<u8>),Striple<SK>>> {
   let tag = &mut [0];
   from.read(tag);
   if tag[0] != 0 {
@@ -115,8 +114,8 @@ pub fn read_striple
   match StripleRef::striple_dser(&st[..],typednone) {
     Ok(s) => {
       match mpkey {
-        None => Ok(MaybeOwnedStriple::NoOwn(s.as_striple(),PhantomData)),
-        Some(pk) => Ok(MaybeOwnedStriple::Owned((s.as_striple(),pk),PhantomData)),
+        None => Ok(MaybeOwnedStriple::NoOwn(s.as_striple())),
+        Some(pk) => Ok(MaybeOwnedStriple::Owned((s.as_striple(),pk))),
       }
     },
     Err(e) => {
@@ -130,13 +129,11 @@ pub fn read_striple
 pub fn write_striple_file
   <'a,
    SC : StorageCypher, 
-   SK : 'a + StripleKind,
-   S  : 'a + StripleIf<SK>,
-   OS : 'a + OwnedStripleIf<SK>,
-   IT : Iterator<Item=&'a MaybeOwnedStriple<SK,OS,S>>,
+   S  : 'a + StripleIf,
+   OS : 'a + OwnedStripleIf,
+   IT : Iterator<Item=&'a MaybeOwnedStriple<OS,S>>,
    W  : Write + Seek,
     > (cypher : & SC, striples : &'a mut  IT, mut file : W) -> Result<()> 
-    where SK::D : 'a, SK::S : 'a
     {
   try!(file.seek(SeekFrom::Start(0)));
   try!(file.write(&SC::get_cypher_header()));
@@ -168,7 +165,7 @@ impl<SK : StripleKind, R : Read + Seek> FileStripleIterator<SK, R> {
   }
 }
 impl<SK : StripleKind, R : Read + Seek> Iterator for FileStripleIterator<SK, R> {
-  type Item = MaybeOwnedStriple<SK,(Striple<SK>,Vec<u8>),Striple<SK>>;
+  type Item = MaybeOwnedStriple<(Striple<SK>,Vec<u8>),Striple<SK>>;
 
   fn next(&mut self) -> Option<Self::Item> {
     match &self.1 {
@@ -215,10 +212,10 @@ pub mod test {
     let striple2 = sampleStriple2();
     let pkey = random_bytes(18);
     debug!("{:?}", buf);
-    let mut wr = write_striple::<_,_,_,(Striple<NoKind>,Vec<u8>),_>(&NoCypher, &MaybeOwnedStriple::NoOwn(striple1.clone(),PhantomData), &mut buf);
+    let mut wr = write_striple::<_,_,(Striple<NoKind>,Vec<u8>),_>(&NoCypher, &MaybeOwnedStriple::NoOwn(striple1.clone()), &mut buf);
     debug!("{:?}", buf);
     assert!(wr.is_ok());
-    wr = write_striple::<_,_,Striple<NoKind>,_,_>(&NoCypher, &MaybeOwnedStriple::Owned((striple2.clone(),pkey.clone()),PhantomData), &mut buf);
+    wr = write_striple::<_,Striple<NoKind>,_,_>(&NoCypher, &MaybeOwnedStriple::Owned((striple2.clone(),pkey.clone())), &mut buf);
     assert!(wr.is_ok());
 
     assert!(buf.seek(SeekFrom::Start(0)).is_ok());
@@ -243,9 +240,9 @@ pub mod test {
     let striple1 = sampleStriple1();
     let striple2 = sampleStriple2();
     let pkey = random_bytes(18);
-    let mut vecst : Vec<MaybeOwnedStriple<NoKind,(Striple<NoKind>,Vec<u8>),Striple<NoKind>>> = Vec::new();
-    vecst.push(MaybeOwnedStriple::NoOwn(striple1.clone(),PhantomData));
-    vecst.push(MaybeOwnedStriple::Owned((striple2.clone(),pkey.clone()),PhantomData));
+    let mut vecst : Vec<MaybeOwnedStriple<(Striple<NoKind>,Vec<u8>),Striple<NoKind>>> = Vec::new();
+    vecst.push(MaybeOwnedStriple::NoOwn(striple1.clone()));
+    vecst.push(MaybeOwnedStriple::Owned((striple2.clone(),pkey.clone())));
     
     let wr = write_striple_file(&NoCypher, &mut vecst.iter(), &mut buf);
     assert!(wr.is_ok());

@@ -51,12 +51,12 @@ impl<K : StripleKind> Display for KindStriples<K> {
   fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
     // TODO nice display in base64
     ftr.debug_struct("")
-    .field("kind", &format!("{}",UnsafeOwnedStripleDisp(&self.kind,PhantomData)))
-    .field("pubripemd", &format!("{}",UnsafeOwnedStripleDisp(&self.pubripemd,PhantomData)))
-    .field("pubsha512", &format!("{}",UnsafeOwnedStripleDisp(&self.pubsha512,PhantomData)))
-    .field("pubsha256", &format!("{}",UnsafeOwnedStripleDisp(&self.pubsha256,PhantomData)))
-    .field("rsa2048Sha512", &format!("{}",UnsafeOwnedStripleDisp(&self.rsa2048Sha512,PhantomData)))
-    .field("ecdsaripemd160", &format!("{}",UnsafeOwnedStripleDisp(&self.ecdsaripemd160,PhantomData)))
+    .field("kind", &format!("{}",UnsafeOwnedStripleDisp(&self.kind)))
+    .field("pubripemd", &format!("{}",UnsafeOwnedStripleDisp(&self.pubripemd)))
+    .field("pubsha512", &format!("{}",UnsafeOwnedStripleDisp(&self.pubsha512)))
+    .field("pubsha256", &format!("{}",UnsafeOwnedStripleDisp(&self.pubsha256)))
+    .field("rsa2048Sha512", &format!("{}",UnsafeOwnedStripleDisp(&self.rsa2048Sha512)))
+    .field("ecdsaripemd160", &format!("{}",UnsafeOwnedStripleDisp(&self.ecdsaripemd160)))
     .finish()
   }
 }
@@ -65,9 +65,9 @@ impl<K : StripleKind> Display for BaseStriples<K> {
   fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
     // TODO nice display in base64
     ftr.debug_struct("")
-    .field("root", &format!("{}",UnsafeOwnedStripleDisp(&self.root,PhantomData)))
-    .field("libcategory", &format!("{}",UnsafeOwnedStripleDisp(&self.libcat,PhantomData)))
-    .field("libkind", &format!("{}",UnsafeOwnedStripleDisp(&self.libkind,PhantomData)))
+    .field("root", &format!("{}",UnsafeOwnedStripleDisp(&self.root)))
+    .field("libcategory", &format!("{}",UnsafeOwnedStripleDisp(&self.libcat)))
+    .field("libkind", &format!("{}",UnsafeOwnedStripleDisp(&self.libkind)))
     .finish()
   }
 }
