@@ -94,7 +94,6 @@ fn writepkbdf2(striples : &Vec<(AnyStriple,Option<Vec<u8>>)>) {
   stdin.read_line(&mut pass);
   // remove terminal \n
   pass.pop();
-println!("{}",pass); 
   let pbk = Pbkdf2::new(pass,2000,None);
   let wr = write_striple_file(&pbk, &mut it, &mut datafile);
 
