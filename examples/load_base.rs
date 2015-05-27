@@ -4,6 +4,7 @@ extern crate striple;
 
 use std::fs::File;
 use std::io::Read;
+use std::io::{stdin,BufRead};
 use std::io::Result as IOResult;
 use striple::storage::FileStripleIterator;
 use striple::striple::NoKind;
@@ -17,7 +18,7 @@ use striple::striple::ErrorKind;
 use striple::striple::AsStriple;
 use striple::striple::StripleIf;
 use striple::striple::OwnedStripleIf;
-use striple::storage::{write_striple_file,NoCypher,RemoveKey,StorageCypher};
+use striple::storage::{write_striple_file,NoCypher,RemoveKey,StorageCypher,initAnyCypherStdIn};
 #[cfg(feature="public_crypto")]
 use striple::striple_kind::public::crypto::PubRipemd;
 #[cfg(feature="public_openssl")]
@@ -29,12 +30,14 @@ use striple::striple_kind::public::openssl::PubRipemd;
 use striple::striple_kind::Rsa2048Sha512;
 #[cfg(feature="cryptoecdsa")]
 use striple::striple_kind::EcdsaRipemd160;
+#[cfg(feature="opensslpbkdf2")]
+use striple::storage::Pbkdf2;
 
 /// load base file produced by generate example (privatekey clear).
 /// Plus write base file without password or with encrypted password.
 fn main() {
   let mut datafile = File::open("./baseperm.data").unwrap();
-  let mut rit : IOResult<FileStripleIterator<NoKind,AnyStriple,_,_>> = FileStripleIterator::init(datafile, copy_builder_any); let mut ix = 0;
+  let mut rit : IOResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>> = FileStripleIterator::init(datafile, copy_builder_any, initAnyCypherStdIn); 
   let striples : Vec<(AnyStriple,Option<Vec<u8>>)> = rit.unwrap().collect();
 
 
@@ -42,6 +45,13 @@ fn main() {
   if (striples[0].1.is_some()){
     println!("doing root checking");
     let ownedroot = (&striples[0].0, &striples[0].1.as_ref().unwrap()[..]);
+
+    // try sign check to check privatekey encryption
+    let cont = vec!(56,84,8,46,250,6,8,7);
+
+    let sign = ownedroot.sign_content(&ownedroot.private_key_ref(),&cont[..]);
+    assert!(ownedroot.check_content(&cont[..],&sign[..]));
+
 
     assert!(striples[1].0.check(&ownedroot) == true);
     assert!(striples[2].0.check(&ownedroot) == true);
@@ -70,21 +80,31 @@ fn main() {
 
 }
 
-#[cfg(feature="opensslpkbdf2")]
+#[cfg(feature="opensslpbkdf2")]
 fn writepkbdf2(striples : &Vec<(AnyStriple,Option<Vec<u8>>)>) {
   
-  let mut datafile = File::create("./baseperm_pkbdf2.data").unwrap();
+  let mut datafile = File::create("./baseperm_pbkdf2.data").unwrap();
 
-  let mut it2 = striples.iter().map(|i|(&i.0,i.1.as_ref().map(|o|&o[..])));
+  let mut it = striples.iter().map(|i|(&i.0,i.1.as_ref().map(|o|&o[..])));
 
-  let wr = write_striple_file(&RemoveKey, &mut it, &mut datafile);
+  println!("writing as protected, please input passphrase ?");
+  let mut tstdin = stdin();
+  let mut stdin = tstdin.lock();
+  let mut pass = String::new();
+  stdin.read_line(&mut pass);
+  // remove terminal \n
+  pass.pop();
+println!("{}",pass); 
+  let pbk = Pbkdf2::new(pass,2000,None);
+  let wr = write_striple_file(&pbk, &mut it, &mut datafile);
 
 }
 
-#[cfg(not(feature="opensslpkbdf2"))]
+#[cfg(not(feature="opensslpbkdf2"))]
 fn writepkbdf2(striples : &Vec<(AnyStriple,Option<Vec<u8>>)>) {
   println!("no pkbdf2 impl activated");
 }
+
 #[cfg(feature="opensslrsa")]
 pub type StripleRSA = Striple<Rsa2048Sha512>;
 #[cfg(not(feature="opensslrsa"))]

@@ -37,7 +37,7 @@ fn main() {
   let mut datafile = File::create("./base.data").unwrap();
   // try!(datafile.seek(SeekFrom::Start(0)));
   let cypher = NoCypher;
-  datafile.write(&NoCypher::get_cypher_header()).unwrap();
+  datafile.write(&cypher.get_cypher_header()).unwrap();
   printlog(&pribase,&prikinds,&pubstriples);
   
   let baseId = get_base_id(&prikinds);
