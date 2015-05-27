@@ -135,7 +135,6 @@ pub mod public_crypto {
     chaining_test::<PubRipemd, PubRipemd> (); 
   }
 
-
 }
 
 #[cfg(feature="public_openssl")]
@@ -261,8 +260,6 @@ fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
   fn test_chaining() {
     chaining_test::<PubSha256, PubSha512> () 
   }
-
-
 
 }
 

@@ -334,9 +334,13 @@ pub trait PubStriple : StripleIf{}
 
 impl<K : StripleKind> PubStriple for Striple<K> where K::S : PublicScheme {}
 impl<'a, K : StripleKind> PubStriple for StripleRef<'a,K> where K::S : PublicScheme {}
+/*
+/// Mark as public based on some asumption, it is the same as using `(&S,&[][..])`
+#[derive(Debug)]
+pub struct UnsafePubStriple<'a, S : StripleIf + 'a> (&'a S);
 
-
-
+impl<'a, S : StripleIf> PubStriple for UnsafePubStriple<'a, S> {}
+*/
 /// public scheme uses same value for public and private key
 impl<S : PubStriple> OwnedStripleIf for S {
 
@@ -350,7 +354,6 @@ impl<S : PubStriple> OwnedStripleIf for S {
 }
 
 /// Striple struct object to manipulate an striple
-/// TODO currently not memory efficient (if id = sig or if from = about two identical vec are stored)
 #[derive(Debug,Clone)]
 pub struct Striple<T : StripleKind> {
   /// id of the striple defining the encoding of the content
@@ -636,110 +639,143 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
 
 }
 
-impl<'a,T : StripleKind> StripleRef<'a,T> {
-  /// decode from bytes, with possible signing validation
-  /// Deserialize does not result in StripleIf, because StripleIf is use to allow reference to
-  /// existing structure and adding content to a structure and still being an StripleIf, yet
-  /// deserialize as a library item is only here to enforce encoding of striple : 
-  /// to use on other structure deserialize must be use by a more general
-  /// deserialize primitive or if particular non striple encoding (in json for instance), the
-  /// resulting struct will use AsStriple (probably to stripleref) to use striple primitive.
-  pub fn striple_dser<'b, FS : StripleIf>  (bytes : &'b[u8], docheck : Option<&FS>) -> Result<StripleRef<'b,T>, Error> {
-    let mut ix = 0;
-    let algoenc = read_id (bytes, &mut ix);
-    if algoenc != <T as StripleKind>::get_algo_key() && <T as StripleKind>::get_algo_key() != NOKEY {
-      return Err(Error("Bad algo kind for this type of striple".to_string(), ErrorKind::UnexpectedStriple))
-    };
-    let contentenc = read_id (bytes, &mut ix); 
-    let id = read_id (bytes, &mut ix);
-    let from = read_id (bytes, &mut ix);
-
-    let s = xtendsizedec(bytes, &mut ix, 4);
-    let mut sig = if ix + s <= bytes.len() {
-      &bytes[ix .. ix + s]
-    } else {
-      &bytes[0 .. 0]
-    };
-    ix = ix + s;
-
-    if sig.len() == 0 {
-      sig = id;
-    }
-    
-    let startcontent = ix;
-
-    let mut about = read_id (bytes, &mut ix);
-    if about.len() == 0 {
-      about = id;
-    };
-
-    let s = xtendsizedec(bytes, &mut ix, 2);
-    let key = if ix + s <= bytes.len() {
-      &bytes[ix .. ix + s]
-    } else {
-      &bytes[0 .. 0]
-    };
-    ix = ix + s;
-
-    let nbcids = xtendsizedec(bytes, &mut ix, 1);
-    let mut contentids = Vec::new();
-    for _ in (0 .. nbcids) {
-      contentids.push(read_id (bytes, &mut ix));
-    };
-
-    let s = xtendsizedec(bytes, &mut ix, 4);
-    let content = if ix + s <= bytes.len() {
-      &bytes[ix .. ix + s]
-    } else {
-      &bytes[0 .. 0]
-    };
-    ix = ix + s;
-
-    if ix != bytes.len() {
-      debug!("strip or {:?} - {:?}", ix, bytes.len());
-      return Err(Error("Mismatch size of striple".to_string(), ErrorKind::DecodingError))
-    }
-
-    let checkerror : Option<Error>= docheck.and_then(|fromst|{
-      if fromst.get_id() != &from[..] {
-        return Some(Error("Unexpected from id".to_string(), ErrorKind::UnexpectedStriple))
-      };
-      let content = &bytes[startcontent .. bytes.len()];
-      if !(
-          fromst.check_id_derivation(sig,id) &&
-          fromst.check_content(content, sig)) {
-        return Some(Error("Invalid signature or key derivation".to_string(), ErrorKind::UnexpectedStriple))
-      };
-      None
-    });
-    match checkerror {
-      Some(err) => {return Err(err);}
-      None => ()
-    };
- 
-
-    if id.len() == 0 
-    || from.len() == 0 
-    || (contentids.len() == 0 && content.len() == 0)
-    {
-      Err(Error("Invalid striple decoding".to_string(), ErrorKind::DecodingError))
-    } else {
-      Ok(StripleRef{
-        contentenc : contentenc,
-        id : id,
-        from : from,
-        sig : sig,
-        about : about,
-        key : key,
-        contentids : contentids,
-        content : content,
-
-        phtype : PhantomData,
-      })
-    }
-  }
- 
+/// deserialize to reference striple without and kind resolution (cast to kind of required kind)
+pub fn ref_builder_id<'a,K : StripleKind>(algoid :&[u8], sr : StripleRef<'a,K>) -> Result<StripleRef<'a,K>, Error> {
+  if algoid != K::get_algo_key() && K::get_algo_key() != NOKEY {
+    return Err(Error("Bad algo kind for this type of striple".to_string(), ErrorKind::UnexpectedStriple))
+  };
+  Ok(sr)
 }
+/// deserialize to striple without and kind resolution (cast to kind of required kind)
+pub fn ref_builder_id_copy<'a,K : StripleKind>(algoid :&[u8], sr : StripleRef<'a,K>) -> Result<Striple<K>, Error> {
+  if algoid != K::get_algo_key() && K::get_algo_key() != NOKEY {
+    return Err(Error("Bad algo kind for this type of striple".to_string(), ErrorKind::UnexpectedStriple))
+  };
+  Ok(sr.as_striple())
+}
+/// deserialize to striple without and kind resolution (cast to kind of required kind)
+pub fn copy_builder_id<'a,K : StripleKind>(algoid :&[u8], sr : Striple<K>) -> Result<Striple<K>, Error> {
+  if algoid != K::get_algo_key() && K::get_algo_key() != NOKEY {
+    return Err(Error("Bad algo kind for this type of striple".to_string(), ErrorKind::UnexpectedStriple))
+  };
+  Ok(sr)
+}
+
+#[inline]
+/// dser without lifetime TODO redesign to interface on same as striple_dser : here useless as
+/// cannot cast in any triple without a copy
+pub fn striple_copy_dser<T : StripleIf, K : StripleKind, FS : StripleIf, B> (bytes : &[u8], docheck : Option<&FS>, builder : B) -> Result<T, Error>
+  where B : Fn(&[u8], Striple<K>) -> Result<T, Error>
+{
+  striple_dser(bytes,docheck,
+   |algoid, sref| {
+    builder(algoid, sref.as_striple())
+  }
+  )
+}
+
+/// decode from bytes, with possible signing validation
+/// Deserialize does not result in StripleIf, because StripleIf is use to allow reference to
+/// existing structure and adding content to a structure and still being an StripleIf, yet
+/// deserialize as a library item is only here to enforce encoding of striple : 
+/// to use on other structure deserialize must be use by a more general
+/// deserialize primitive or if particular non striple encoding (in json for instance), the
+/// resulting struct will use AsStriple (probably to stripleref) to use striple primitive.
+pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (bytes : &'a[u8], docheck : Option<&FS>, ref_builder : B) -> Result<T, Error>
+  where B : Fn(&[u8], StripleRef<'a,K>) -> Result<T, Error>
+{
+  let mut ix = 0;
+  let algoenc = read_id (bytes, &mut ix);
+  let contentenc = read_id (bytes, &mut ix); 
+  let id = read_id (bytes, &mut ix);
+  let from = read_id (bytes, &mut ix);
+
+  let s = xtendsizedec(bytes, &mut ix, 4);
+  let mut sig = if ix + s <= bytes.len() {
+    &bytes[ix .. ix + s]
+  } else {
+    &bytes[0 .. 0]
+  };
+  ix = ix + s;
+
+  if sig.len() == 0 {
+    sig = id;
+  }
+  
+  let startcontent = ix;
+
+  let mut about = read_id (bytes, &mut ix);
+  if about.len() == 0 {
+    about = id;
+  };
+
+  let s = xtendsizedec(bytes, &mut ix, 2);
+  let key = if ix + s <= bytes.len() {
+    &bytes[ix .. ix + s]
+  } else {
+    &bytes[0 .. 0]
+  };
+  ix = ix + s;
+
+  let nbcids = xtendsizedec(bytes, &mut ix, 1);
+  let mut contentids = Vec::new();
+  for _ in (0 .. nbcids) {
+    contentids.push(read_id (bytes, &mut ix));
+  };
+
+  let s = xtendsizedec(bytes, &mut ix, 4);
+  let content = if ix + s <= bytes.len() {
+    &bytes[ix .. ix + s]
+  } else {
+    &bytes[0 .. 0]
+  };
+  ix = ix + s;
+
+  if ix != bytes.len() {
+    debug!("strip or {:?} - {:?}", ix, bytes.len());
+    return Err(Error("Mismatch size of striple".to_string(), ErrorKind::DecodingError))
+  }
+
+  let checkerror : Option<Error>= docheck.and_then(|fromst|{
+    if fromst.get_id() != &from[..] {
+      return Some(Error("Unexpected from id".to_string(), ErrorKind::UnexpectedStriple))
+    };
+    let content = &bytes[startcontent .. bytes.len()];
+    if !(
+        fromst.check_id_derivation(sig,id) &&
+        fromst.check_content(content, sig)) {
+      return Some(Error("Invalid signature or key derivation".to_string(), ErrorKind::UnexpectedStriple))
+    };
+    None
+  });
+  match checkerror {
+    Some(err) => {return Err(err);}
+    None => ()
+  };
+
+
+  if id.len() == 0 
+  || from.len() == 0 
+  || (contentids.len() == 0 && content.len() == 0)
+  {
+    Err(Error("Invalid striple decoding".to_string(), ErrorKind::DecodingError))
+  } else {
+    let r = StripleRef {
+      contentenc : contentenc,
+      id : id,
+      from : from,
+      sig : sig,
+      about : about,
+      key : key,
+      contentids : contentids,
+      content : content,
+
+      phtype : PhantomData,
+    };
+    ref_builder(algoenc,r)
+  }
+}
+ 
 
 /// Trait for structure that could be use as an striple.
 /// A structure can contain multiple striple, that is why the trait is parametric.
@@ -813,7 +849,7 @@ impl<T : StripleKind> Decodable for Striple<T> {
     // Dummy type
     let typednone : Option<&Striple<T>> = None;
     tmpres.and_then(|vec| 
-      StripleRef::striple_dser(&vec, typednone).map(|r|r.as_striple()).map_err(|err|
+      striple_dser(&vec, typednone, ref_builder_id_copy).map_err(|err|
         d.error(&format!("{:?}",err))
       )
     )
@@ -822,7 +858,7 @@ impl<T : StripleKind> Decodable for Striple<T> {
 
 /// striple Error type TODO impl Display trait
 #[derive(Debug)]
-pub struct Error(String, ErrorKind);
+pub struct Error(pub String, pub ErrorKind);
 
 impl ErrorTrait for Error {
   
@@ -1167,6 +1203,8 @@ pub mod test {
   use self::rand::Rng;
   use std::marker::PhantomData;
   use striple::Striple;
+  use striple::striple_dser;
+  use striple::striple_copy_dser;
   use striple::StripleRef;
   use striple::StripleIf;
   use striple::AsStriple;
@@ -1174,6 +1212,9 @@ pub mod test {
   use striple::NoKind;
   use striple::as_kind;
   use striple::mut_as_kind;
+  use striple::ref_builder_id_copy;
+  use striple::ref_builder_id;
+  use striple::copy_builder_id;
   use striple::IDDerivation;
   use striple::SignatureScheme;
 
@@ -1273,12 +1314,15 @@ pub mod test {
     let encori_1 = ori_1.striple_ser();
     debug!("Encoded : \n{:?}",encori_1);
     let typednone : Option<&Striple<TestKind1>> = Some(&ori_2);
-    let dec1_ref = StripleRef::striple_dser(&encori_1, typednone).unwrap();
-    let dec1 : Striple<TestKind1> = dec1_ref.as_striple();
+    let dec1 : Striple<TestKind1> = striple_dser(&encori_1,typednone,ref_builder_id_copy).unwrap();
     assert_eq!(compare_striple(&ori_1,&dec1), true);
     let encori_ref_1 = ori_ref_1.striple_ser();
     assert_eq!(encori_1,encori_ref_1);
-
+    let redec1 : Striple<TestKind1> = striple_copy_dser(&encori_1,typednone,copy_builder_id).unwrap();
+    assert_eq!(compare_striple(&ori_1,&redec1), true);
+    let redec1bis : StripleRef<TestKind1> = striple_dser(&encori_1,typednone,ref_builder_id).unwrap();
+    let encori_ref_1_bis = redec1bis.striple_ser();
+    assert_eq!(encori_1,encori_ref_1_bis);
   }
 
   /// test set to run on any striple kind

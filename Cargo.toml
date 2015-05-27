@@ -5,7 +5,8 @@ version = "0.0.1"
 authors = ["Emeric Chevalier <emericchevalier.pro@gmail.com>"]
 
 [features]
-default = ["public_crypto","serialize","public_openssl","cryptoecdsa","opensslrsa"]
+default = ["public_crypto","public_openssl","cryptoecdsa","opensslrsa"]
+#default = ["public_crypto","serialize","public_openssl","cryptoecdsa","opensslrsa"]
 #default = []
 serialize = ["rustc-serialize"]
 opensslrsa = ["openssl"]
