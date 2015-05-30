@@ -23,6 +23,11 @@ path = "examples/generate_base.rs"
 name='loadbaststriples'
 path = "examples/load_base.rs"
 
+[[example]]
+name='striple'
+path = "examples/striple.rs"
+
+
 
 
 

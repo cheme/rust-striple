@@ -27,10 +27,31 @@ use striple::striple_kind::Rsa2048Sha512;
 use striple::striple_kind::EcdsaRipemd160;
 
 
+//tmp
+use striple::striple::IDDerivation;
+fn genselfpublic<K:StripleKind>(content : String, _ : PhantomData<K>) -> Striple<K> 
+  where K::S : PublicScheme
 
+{
+   let typednone : Option<&Striple<K>> = None;
+  // self public
+  let pubcat : ( Striple<K>, Vec<u8>) = Striple::new(
+    vec!(),
+    typednone,
+    None,
+    vec!(),
+    content.as_bytes().to_vec(),
+    );
+  pubcat.0
+}
 
 fn main() {
-  let (pribase,prikinds) = base_gen().unwrap();
+
+  let pubcat = genselfpublic("CATEGORY".to_string(), get_public_kind());
+  let pubkind = genselfpublic("KIND".to_string(), get_public_kind());
+ 
+
+  let (pribase,prikinds) = base_gen(pubcat.get_id().to_vec(), pubkind.get_id().to_vec()).unwrap();
   let pubstriples = kind_gen(&pribase).unwrap();
 
   println!("Writing base to './base.data' and './base.log'");
@@ -39,12 +60,74 @@ fn main() {
   let cypher = NoCypher;
   datafile.write(&cypher.get_cypher_header()).unwrap();
   printlog(&pribase,&prikinds,&pubstriples);
-  
   let baseId = get_base_id(&prikinds);
   println!("base : {:?}",baseId);
   let kindId = get_kind_id(&prikinds);
   println!("base : {:?}",kindId);
+
+// Temporary code -------------------------
+  /*TODO generate "bitcoin timestamped by ECH" from root, about public cat (should be some others)
+  TODO generate "timestamp" from self public, about signed public kind (should be some others)
+  TODO generate from previous + 1, about previous, content from file containing hash as byte. calculate and print ripemd of the striple + write striple only in a file to check ripem hash ... & base64*/
+    // read 
+
+    let mut commitfile = File::open("./gitcommithash.hash").unwrap();
+    let mut hash = Vec::new();
+    commitfile.read_to_end(&mut hash);
+    let typednone : Option<&Striple<PubSha512>> = None;
+    let ts : ( Striple<PubSha512>, Vec<u8>) = Striple::new(
+    vec!(),
+    typednone,
+    Some(pubcat.get_id().to_vec()),
+    vec!(),
+    "bitcoin github timestamp (sha512 then ripemd160 of commit archive)".as_bytes().to_vec(),
+    );
+
+    let personalts : ( Striple<Rsa2048Sha512>, Vec<u8>) = Striple::new(
+    vec!(),
+    Some(&pribase.root),
+    Some(pubcat.get_id().to_vec()),
+    vec!(),
+    "bitcoin timestamped by ECH".as_bytes().to_vec(),
+    );
+
+    let hashstamp : ( Striple<Rsa2048Sha512>, Vec<u8>) = Striple::new(
+    vec!(),
+    Some(&personalts),
+    Some(ts.get_id().to_vec()),
+    vec!(),
+    hash,
+    );
+    let hashstamp2 : ( Striple<PubSha512>, Vec<u8>) = Striple::new(
+    vec!(),
+    Some(&hashstamp),
+    None, // TODO description about id : here just some unstructured info signed by the stamp NOte that it is only informational : not well designed (a striple  + should be sha1 byte in content...
+    vec!(),
+    "Git commit TODO sha1".as_bytes().to_vec(),
+    );
+
+
+  let mut stripleonlyfile = File::create("./striplenohash").unwrap();
+  stripleonlyfile.write_all(&hashstamp.striple_ser()[..]);
+
+
+  let mut datafile2 = File::create("./timestamp.data").unwrap();
+  datafile2.write(&cypher.get_cypher_header()).unwrap();
+  let cypher2 = NoCypher;
+  write_striple_with_enc(&cypher2,&ts.0,None,&mut datafile2, &kindId).unwrap();
+  write_striple_with_enc(&cypher2,&personalts.0,Some(&personalts.1),&mut datafile2, &baseId).unwrap();
+  write_striple_with_enc(&cypher2,&hashstamp.0,Some(&hashstamp.1),&mut datafile2, &baseId).unwrap();
+  write_striple_with_enc(&cypher2,&hashstamp2.0,None,&mut datafile2, &kindId).unwrap();
+ 
+ 
+
+// End Temporary code ----------------
+
   write_striple_with_enc(&cypher,&pribase.root.0,Some(&pribase.root.1),&mut datafile, &baseId).unwrap();
+
+  write_striple_with_enc(&cypher,&pubcat,None,&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&pubkind,None,&mut datafile, &baseId).unwrap();
+ 
   write_striple_with_enc(&cypher,&pribase.libcat.0,Some(&pribase.libcat.1),&mut datafile, &baseId).unwrap();
   write_striple_with_enc(&cypher,&pribase.libkind.0,Some(&pribase.libkind.1),&mut datafile, &baseId).unwrap();
   write_striple_with_enc(&cypher,&prikinds.kind.0,Some(&prikinds.kind.1),&mut datafile, &baseId).unwrap();
@@ -60,7 +143,13 @@ fn main() {
   write_striple_with_enc(&cypher,&pubstriples.rsa2048Sha512,None,&mut datafile, &kindId).unwrap();
   write_striple_with_enc(&cypher,&pubstriples.ecdsaripemd160,None,&mut datafile, &kindId).unwrap();
 
-
+//tmp
+  write_striple_with_enc(&cypher,&ts.0,None,&mut datafile, &kindId).unwrap();
+  write_striple_with_enc(&cypher,&personalts.0,Some(&personalts.1),&mut datafile, &baseId).unwrap();
+   write_striple_with_enc(&cypher,&hashstamp.0,Some(&hashstamp.1),&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&hashstamp2.0,None,&mut datafile, &kindId).unwrap();
+ 
+//tmp
 }
 
 #[cfg(feature="serialize")]
@@ -81,6 +170,13 @@ fn printlog<K1 : StripleKind, K2 : StripleKind> (pribase : &BaseStriples<K1>, pr
 
 }
 
+#[cfg(feature="public_openssl")]
+fn get_public_kind() -> PhantomData<PubSha512> { PhantomData }
+#[cfg(not(feature="public_openssl"))]
+#[cfg(feature="public_crypto")]
+fn get_public_kind() -> PhantomData<PubRipemd> { PhantomData }
+
+
 // default to openssl if openssl and rust-crypto are enabled
 #[cfg(feature="public_openssl")]
 fn kind_gen<K : StripleKind>(pri : &BaseStriples<K>) -> Option<KindStriples<PubSha512>> {
@@ -91,11 +187,11 @@ fn kind_gen<K : StripleKind>(pri : &BaseStriples<K>) -> Option<KindStriples<PubS
 fn get_kind_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
   pri.pubsha512.0.get_id().to_vec()
 }
- 
+// TODO rewrite using get_privatekind 
 #[cfg(feature="opensslrsa")]
-fn base_gen() -> Option<(BaseStriples<Rsa2048Sha512>,KindStriples<Rsa2048Sha512>)> {
+fn base_gen(cat : Vec<u8>, kind : Vec<u8>) -> Option<(BaseStriples<Rsa2048Sha512>,KindStriples<Rsa2048Sha512>)> {
   println!("Generating private RSA2048 of sha512 base with openssl dependancy");
-  gen_pri::<Rsa2048Sha512>()
+  gen_pri::<Rsa2048Sha512>(cat, kind)
 }
 #[cfg(feature="opensslrsa")]
 fn get_base_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
@@ -117,9 +213,9 @@ fn get_kind_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
  
 #[cfg(not(feature="opensslrsa"))]
 #[cfg(feature="cryptoecdsa")]
-fn base_gen() -> Option<(BaseStriples<EcdsaRipemd160>,KindStriples<EcdsaRipemd160>)> {
+fn base_gen(cat : Vec<u8>, kind : Vec<u8>) -> Option<(BaseStriples<EcdsaRipemd160>,KindStriples<EcdsaRipemd160>)> {
   println!("Generating private ECDSA of ripemd160 with rust-crypto dependancy");
-  gen_pri::<EcdsaRipemd160>()
+  gen_pri::<EcdsaRipemd160>(cat, kind)
 }
 
 #[cfg(not(feature="opensslrsa"))]
@@ -143,7 +239,7 @@ fn get_kind_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
  
 #[cfg(not(feature="opensslrsa"))]
 #[cfg(not(feature="cryptoecdsa"))]
-fn base_gen() -> Option<(BaseStriples<NoKind>,KindStriples<NoKind>)> {
+fn base_gen(cat : &[u8], kind : &[u8]) -> Option<(BaseStriples<NoKind>,KindStriples<NoKind>)> {
   println!("No features enabled to allow private generation.");
   None
 }
@@ -155,7 +251,7 @@ fn get_base_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
 
 
 
-fn gen_pri<K : StripleKind>() -> Option<(BaseStriples<K>,KindStriples<K>)> {
+fn gen_pri<K : StripleKind>(cat : Vec<u8>, kind : Vec<u8>) -> Option<(BaseStriples<K>,KindStriples<K>)> {
   let typednone : Option<&(Striple<K>, Vec<u8>)> = None;
   let ownedRoot : (Striple<K>, Vec<u8>) = Striple::new(
     // No meta (content encoding def)
@@ -172,16 +268,16 @@ fn gen_pri<K : StripleKind>() -> Option<(BaseStriples<K>,KindStriples<K>)> {
   let ownedCat : (Striple<K>, Vec<u8>) = Striple::new(
     vec!(),
     Some(&ownedRoot),
-    // recursive about // TODO change by public generic kind??
-    None,
+    // generic category
+    Some(cat),
     vec!(),
     "Striple Lib Categories".as_bytes().to_vec(),
     );
   let ownedKind : (Striple<K>, Vec<u8>) = Striple::new(
     vec!(),
     Some(&ownedRoot),
-    // recursive about // TODO change by public generic category??
-    None,
+    // generic kind
+    Some(kind),
     vec!(),
     "Striple Lib Kind".as_bytes().to_vec(),
     );

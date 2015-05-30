@@ -28,6 +28,8 @@ use self::openssl::crypto::symm::{Crypter,Mode,Type};
 
 #[cfg(feature="opensslpbkdf2")]
 use self::rand::Rng;
+#[cfg(feature="opensslpbkdf2")]
+use self::rand::os::OsRng;
 use std::fmt::Result as FmtResult;
 use std::fmt::{Formatter};
 
@@ -48,6 +50,7 @@ macro_rules! derive_any_cypher(($en:ident{ $($st:ident($ty:ty),)* }) => (
 pub enum $en {
   $( $st($ty), )*
 }
+
 impl StorageCypher for $en {
   #[inline]
   fn get_id_val (&self) -> usize {
@@ -100,6 +103,7 @@ pub struct Pbkdf2 {
   keylength : usize,
   salt : Vec<u8>,
   crypter : Crypter,
+  key : Vec<u8>,
 }
  
 impl Debug for Pbkdf2 {
@@ -130,19 +134,22 @@ impl Pbkdf2 {
       Some(s) => s,
       None => {
         // gen salt
-        let mut rng = rand::thread_rng();
+        let mut rng = OsRng::new().unwrap();
         let mut s = vec![0; 256 /8];
         rng.fill_bytes(&mut s);
         s
       },
     };
+    let kl = 256 / 8;
+    let key = pbkdf2_hmac_sha1(&pass[..], &salt[..], iter, kl);
     crypter.pad(true);
     Pbkdf2 {
       pass : pass,
       iter : iter, 
-      keylength : 256 / 8,
+      keylength : kl,
       salt : salt,
       crypter : crypter,
+      key : key,
     }
   }
 }
@@ -161,12 +168,11 @@ impl StorageCypher for Pbkdf2 {
   }
   fn encrypt (&self, pk : &[u8]) -> Vec<u8> {
     // gen salt
-    let mut rng = rand::thread_rng();
+    let mut rng = OsRng::new().unwrap();
     let mut iv = vec![0; self.keylength];
     rng.fill_bytes(&mut iv);
  
-    let pass = pbkdf2_hmac_sha1(&self.pass[..], &self.salt[..], self.iter, self.keylength);
-    self.crypter.init(Mode::Encrypt,&pass[..],iv.clone());
+    self.crypter.init(Mode::Encrypt,&self.key[..],iv.clone());
     let mut result = iv;
     result.push_all(&self.crypter.update(pk));
     result.push_all(&self.crypter.finalize());
@@ -175,8 +181,7 @@ impl StorageCypher for Pbkdf2 {
   fn decrypt (&self, pk : &[u8]) -> Vec<u8> {
     let iv = &pk[..self.keylength];
     let enc = &pk[self.keylength..];
-    let pass = pbkdf2_hmac_sha1(&self.pass[..], &self.salt[..], self.iter, self.keylength);
-    self.crypter.init(Mode::Decrypt,&pass[..],iv.to_vec());
+    self.crypter.init(Mode::Decrypt,&self.key[..],iv.to_vec());
     let mut result = self.crypter.update(enc);
     result.push_all(&self.crypter.finalize());
     result
@@ -229,6 +234,7 @@ pub fn write_striple
       try!(dest.write(&to_ser));
       Ok(())
 }
+
 pub fn read_striple
   <SC : StorageCypher, 
    SK : StripleKind,
@@ -317,15 +323,8 @@ pub fn write_striple_file
   try!(file.seek(SeekFrom::Start(0)));
   try!(file.write(&cypher.get_cypher_header()));
   for mos in striples {
-    match mos.1 {
-      Some (pk) => 
-    try!(write_striple(cypher,mos.0,Some(&pk[..]),&mut file)),
-      None => 
-    try!(write_striple(cypher,mos.0,None,&mut file)),
-    }
+    try!(write_striple(cypher,mos.0,mos.1.as_ref().map(|pk|&pk[..]),&mut file));
   };
-//  write_striple(cypher,striples.next().unwrap(),&mut file);
-  
 
   Ok(())
 }
@@ -391,7 +390,7 @@ impl<SK : StripleKind, T : StripleIf, R : Read + Seek, B, C : StorageCypher> Ite
 
   fn next(&mut self) -> Option<Self::Item> {
     let res = read_striple::<_,SK,_,_,_>(&self.1, &mut self.0, &self.2);
-    println!("{:?}",res);
+//    println!("{:?}",res);
         
     res.ok()
   }
@@ -480,6 +479,5 @@ pub mod test {
     let st3 = it.next();
     assert!(st3.is_none());
   }
- 
 
 }

@@ -1,7 +1,9 @@
 //! load base striple from a file
 //! this is an example of how to resolve types if they are not known at launch.
 extern crate striple;
-
+extern crate openssl;
+use std::io::Write;
+use self::openssl::crypto::pkey::{PKey};
 use std::fs::File;
 use std::io::Read;
 use std::io::{stdin,BufRead};
@@ -50,19 +52,27 @@ fn main() {
     let cont = vec!(56,84,8,46,250,6,8,7);
 
     let sign = ownedroot.sign_content(&ownedroot.private_key_ref(),&cont[..]);
+/*    let mut pkey = PKey::new();
+    pkey.load_priv (&ownedroot.private_key()[..]);
+    let mut pemfile = File::create("./pem.pem").unwrap();
+    let mut sigfile = File::create("./sig.sig").unwrap();
+    pkey.write_pem(&mut pemfile);
+    sigfile.write_all(&sign[..]);
+ */   
+    println!("SIGN{:?}:{:?}", sign.len(), sign);
     assert!(ownedroot.check_content(&cont[..],&sign[..]));
 
 
-    assert!(striples[1].0.check(&ownedroot) == true);
-    assert!(striples[2].0.check(&ownedroot) == true);
+    assert!(striples[3].0.check(&ownedroot) == true);
+    assert!(striples[4].0.check(&ownedroot) == true);
   }
   // Doing some public check
-   if (striples[9].1.is_none()){
+   if (striples[11].1.is_none()){
     println!("doing public checking");
-    let ownedkind = (&striples[9].0, &[][..]);
+    let ownedkind = (&striples[11].0, &[][..]);
 
-    assert!(striples[11].0.check(&ownedkind) == true);
-    assert!(striples[12].0.check(&ownedkind) == true);
+    assert!(striples[13].0.check(&ownedkind) == true);
+    assert!(striples[14].0.check(&ownedkind) == true);
   }
  
   // rewrite without private key for publishing

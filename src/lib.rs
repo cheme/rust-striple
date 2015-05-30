@@ -39,14 +39,14 @@ pub mod striple_kind {
   pub use striple::NoKind;
 
   pub mod public {
-  #[cfg(feature="public_crypto")]
-  pub mod crypto {
-    pub use public::public_crypto::{PubRipemd};
-  }
-  #[cfg(feature="public_openssl")]
-  pub mod openssl {
-    pub use public::public_openssl::{PubRipemd,PubSha512,PubSha256};
-  }
+    #[cfg(feature="public_crypto")]
+    pub mod crypto {
+      pub use public::public_crypto::{PubRipemd};
+    }
+    #[cfg(feature="public_openssl")]
+    pub mod openssl {
+      pub use public::public_openssl::{PubRipemd,PubSha512,PubSha256};
+    }
   }
 
   #[cfg(feature="opensslrsa")]

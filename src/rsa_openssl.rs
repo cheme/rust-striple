@@ -1,5 +1,6 @@
 //! striple kind combining Openssl primitive for RSA 2048 and key
 //! representation or content signing hash as SHA-512 of rsa key or original content.
+//! PKCS#1 structure is used to encode key
 
 extern crate openssl;
 
@@ -54,7 +55,9 @@ impl SignatureScheme for Rsa2048 {
     pkey.load_priv(pri);
     let mut digest = Hasher::new(HASH_SIGN);
     digest.write_all(cont).unwrap();
-    pkey.sign_with_hash(&digest.finish(), HASH_SIGN)
+    let tosig = digest.finish();
+    println!("TOSIG {:?} : {:?}",tosig.len(),tosig);
+    pkey.sign_with_hash(&tosig, HASH_SIGN)
   }
 
   /// first parameter is public key, second is content and third is signature

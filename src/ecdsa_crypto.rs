@@ -13,6 +13,7 @@ use self::crypto::ed25519;
 use stripledata;
 use self::rand::Rng;
 use self::rand::thread_rng;
+use self::rand::os::OsRng;
 
 #[cfg(test)]
 #[cfg(feature="public_crypto")]
@@ -68,7 +69,7 @@ impl SignatureScheme for Ecdsa {
 
   /// create keypair (first is public, second is private)
   fn new_keypair() -> (Vec<u8>, Vec<u8>) {
-    let seed = random_bytes(32);
+    let seed = sec_random_bytes(32);
     let (pr, pu) = ed25519::keypair(&seed);
     (pu.to_vec(), pr.to_vec())
   }
@@ -153,6 +154,12 @@ fn hash_buf_crypto(buff : &[u8], digest : &mut Digest) -> Vec<u8> {
 }
 
 
+fn sec_random_bytes(size : usize) -> Vec<u8> {
+   let mut rng = OsRng::new().unwrap();
+   let mut bytes = vec![0; size];
+   rng.fill_bytes(&mut bytes[..]);
+   bytes
+}
 
 fn random_bytes(size : usize) -> Vec<u8> {
    let mut rng = rand::thread_rng();
