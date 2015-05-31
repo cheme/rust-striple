@@ -28,7 +28,9 @@ use striple::striple_kind::EcdsaRipemd160;
 
 
 //tmp
-use striple::striple::IDDerivation;
+//use striple::striple::IDDerivation;
+//use striple::storage::RemoveKey;
+
 fn genselfpublic<K:StripleKind>(content : String, _ : PhantomData<K>) -> Striple<K> 
   where K::S : PublicScheme
 
@@ -60,17 +62,17 @@ fn main() {
   let cypher = NoCypher;
   datafile.write(&cypher.get_cypher_header()).unwrap();
   printlog(&pribase,&prikinds,&pubstriples);
-  let baseId = get_base_id(&prikinds);
-  println!("base : {:?}",baseId);
-  let kindId = get_kind_id(&prikinds);
-  println!("base : {:?}",kindId);
+  let privateEnc = get_base_id(&prikinds);
+  println!("base : {:?}",privateEnc);
+  let publicEnc = get_kind_id(&prikinds);
+  println!("base : {:?}",publicEnc);
 
 // Temporary code -------------------------
   /*TODO generate "bitcoin timestamped by ECH" from root, about public cat (should be some others)
   TODO generate "timestamp" from self public, about signed public kind (should be some others)
   TODO generate from previous + 1, about previous, content from file containing hash as byte. calculate and print ripemd of the striple + write striple only in a file to check ripem hash ... & base64*/
     // read 
-
+/*
     let mut commitfile = File::open("./gitcommithash.hash").unwrap();
     let mut hash = Vec::new();
     commitfile.read_to_end(&mut hash);
@@ -96,60 +98,62 @@ fn main() {
     Some(&personalts),
     Some(ts.get_id().to_vec()),
     vec!(),
-    hash,
+    hash.clone(), // nrLTWyXuy1493HDX4dD/DhsutEk=
     );
     let hashstamp2 : ( Striple<PubSha512>, Vec<u8>) = Striple::new(
     vec!(),
     Some(&hashstamp),
     None, // TODO description about id : here just some unstructured info signed by the stamp NOte that it is only informational : not well designed (a striple  + should be sha1 byte in content...
     vec!(),
-    "Git commit TODO sha1".as_bytes().to_vec(),
+    "Git commit d56fbf24d7eb4a6b924cbde3c369193685d1eb82 sha1".as_bytes().to_vec(),
     );
 
 
-  let mut stripleonlyfile = File::create("./striplenohash").unwrap();
-  stripleonlyfile.write_all(&hashstamp.striple_ser()[..]);
+  let mut stripleonlyfile = File::create("./timestamp_id.data").unwrap();
+  stripleonlyfile.write_all(hashstamp.get_id());
 
+  let mut stripleonlyfile2 = File::create("./timestampinfo_id.data").unwrap();
+  stripleonlyfile2.write_all(hashstamp2.get_id());
 
-  let mut datafile2 = File::create("./timestamp.data").unwrap();
-  datafile2.write(&cypher.get_cypher_header()).unwrap();
   let cypher2 = NoCypher;
-  write_striple_with_enc(&cypher2,&ts.0,None,&mut datafile2, &kindId).unwrap();
-  write_striple_with_enc(&cypher2,&personalts.0,Some(&personalts.1),&mut datafile2, &baseId).unwrap();
-  write_striple_with_enc(&cypher2,&hashstamp.0,Some(&hashstamp.1),&mut datafile2, &baseId).unwrap();
-  write_striple_with_enc(&cypher2,&hashstamp2.0,None,&mut datafile2, &kindId).unwrap();
+  let mut datafile2 = File::create("./timestamp.data").unwrap();
+  datafile2.write(&cypher2.get_cypher_header()).unwrap();
+  write_striple_with_enc(&cypher2,&ts.0,None,&mut datafile2, &publicEnc).unwrap();
+  write_striple_with_enc(&cypher2,&personalts.0,Some(&personalts.1),&mut datafile2, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher2,&hashstamp.0,Some(&hashstamp.1),&mut datafile2, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher2,&hashstamp2.0,None,&mut datafile2, &publicEnc).unwrap();
+  let cypher3 = RemoveKey;
+   let mut datafile3 = File::create("./timestamp_nokey.data").unwrap();
+  datafile3.write(&cypher3.get_cypher_header()).unwrap();
+  write_striple_with_enc(&cypher3,&ts.0,None,&mut datafile3, &publicEnc).unwrap();
+  write_striple_with_enc(&cypher3,&personalts.0,Some(&personalts.1),&mut datafile3, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher3,&hashstamp.0,Some(&hashstamp.1),&mut datafile3, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher3,&hashstamp2.0,None,&mut datafile3, &publicEnc).unwrap();
  
- 
+*/
 
 // End Temporary code ----------------
 
-  write_striple_with_enc(&cypher,&pribase.root.0,Some(&pribase.root.1),&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&pribase.root.0,Some(&pribase.root.1),&mut datafile, &privateEnc).unwrap();
 
-  write_striple_with_enc(&cypher,&pubcat,None,&mut datafile, &baseId).unwrap();
-  write_striple_with_enc(&cypher,&pubkind,None,&mut datafile, &baseId).unwrap();
+  write_striple_with_enc(&cypher,&pubcat,None,&mut datafile, &publicEnc).unwrap();
+  write_striple_with_enc(&cypher,&pubkind,None,&mut datafile, &publicEnc).unwrap();
  
-  write_striple_with_enc(&cypher,&pribase.libcat.0,Some(&pribase.libcat.1),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc(&cypher,&pribase.libkind.0,Some(&pribase.libkind.1),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.kind.0,Some(&prikinds.kind.1),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.pubripemd.0,Some(&prikinds.pubripemd.1),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.pubsha512.0,Some(&prikinds.pubsha512.1),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.pubsha256.0,Some(&prikinds.pubsha256.1),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.rsa2048Sha512.0,Some(&prikinds.rsa2048Sha512.1),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.ecdsaripemd160.0,Some(&prikinds.ecdsaripemd160.1),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.kind,None,&mut datafile, &kindId).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.pubripemd,None,&mut datafile, &kindId).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.pubsha512,None,&mut datafile, &kindId).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.pubsha256,None,&mut datafile, &kindId).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.rsa2048Sha512,None,&mut datafile, &kindId).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.ecdsaripemd160,None,&mut datafile, &kindId).unwrap();
+  write_striple_with_enc(&cypher,&pribase.libcat.0,Some(&pribase.libcat.1),&mut datafile, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher,&pribase.libkind.0,Some(&pribase.libkind.1),&mut datafile, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.kind.0,Some(&prikinds.kind.1),&mut datafile, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.pubripemd.0,Some(&prikinds.pubripemd.1),&mut datafile, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.pubsha512.0,Some(&prikinds.pubsha512.1),&mut datafile, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.pubsha256.0,Some(&prikinds.pubsha256.1),&mut datafile, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.rsa2048Sha512.0,Some(&prikinds.rsa2048Sha512.1),&mut datafile, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.ecdsaripemd160.0,Some(&prikinds.ecdsaripemd160.1),&mut datafile, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.kind,None,&mut datafile, &publicEnc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.pubripemd,None,&mut datafile, &publicEnc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.pubsha512,None,&mut datafile, &publicEnc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.pubsha256,None,&mut datafile, &publicEnc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.rsa2048Sha512,None,&mut datafile, &publicEnc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.ecdsaripemd160,None,&mut datafile, &publicEnc).unwrap();
 
-//tmp
-  write_striple_with_enc(&cypher,&ts.0,None,&mut datafile, &kindId).unwrap();
-  write_striple_with_enc(&cypher,&personalts.0,Some(&personalts.1),&mut datafile, &baseId).unwrap();
-   write_striple_with_enc(&cypher,&hashstamp.0,Some(&hashstamp.1),&mut datafile, &baseId).unwrap();
-  write_striple_with_enc(&cypher,&hashstamp2.0,None,&mut datafile, &kindId).unwrap();
- 
-//tmp
 }
 
 #[cfg(feature="serialize")]
