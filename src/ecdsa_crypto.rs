@@ -84,9 +84,9 @@ impl StripleKind for EcdsaRipemd160 {
   type D = RIPEMD160KD;
   type S = Ecdsa;
   fn get_algo_key() -> &'static [u8] {
-      match *stripledata::KIND {
+      match *stripledata::KINDIDS {
         Some (ref kinds) => {
-          &kinds.ecdsaripemd160.0.id[..]
+          &kinds.ecdsaripemd160[..]
         },
         None => stripledata::ECDSARIPEMD160KEY,
       }

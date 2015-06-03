@@ -51,6 +51,10 @@ pub trait StripleIf : Clone + Debug {
     from.check_id_derivation(self.get_sig(), self.get_id())
   }
 
+  /// get content enc value
+  fn get_enc(&self) -> &[u8];
+
+
   /// get striple key value
   fn get_id(&self) -> &[u8];
 
@@ -203,6 +207,10 @@ impl<'a, ST : StripleIf> StripleIf for (&'a ST, &'a [u8]) {
     self.0.striple_ser()
   }
   #[inline]
+  fn get_enc(&self) -> &[u8] {
+    self.0.get_enc()
+  }
+  #[inline]
   fn get_key(&self) -> &[u8] {
     self.0.get_key()
   }
@@ -277,6 +285,10 @@ impl<ST : StripleIf> StripleIf for (ST, Vec<u8>) {
   #[inline]
   fn get_about(&self) -> &[u8] {
     self.0.get_about()
+  }
+  #[inline]
+  fn get_enc(&self) -> &[u8] {
+    self.0.get_enc()
   }
   #[inline]
   fn get_from(&self) -> &[u8] {
@@ -550,6 +562,8 @@ impl<T : StripleKind> StripleIf for Striple<T> {
   #[inline]
   fn get_from(&self) -> &[u8] {&self.from}
   #[inline]
+  fn get_enc(&self) -> &[u8] {&self.contentenc}
+  #[inline]
   fn get_content(&self) -> &[u8] {&self.content  }
   #[inline]
   fn get_content_ids(&self) -> Vec<&[u8]> {
@@ -624,6 +638,8 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
   }
   #[inline]
   fn get_from(&self) -> &[u8] {self.from}
+  #[inline]
+  fn get_enc(&self) -> &[u8] {self.contentenc}
   #[inline]
   fn get_content(&self) -> &[u8] {self.content}
   #[inline]
@@ -1634,12 +1650,22 @@ impl<'a,  S : StripleIf> Display for StripleDisp<'a, S> {
       catids + "]"
       }
     )
-    .field("content", &self.0.get_content().to_base64(base64conf))
+    .field("content", &truncated_content(self.0.get_content()).to_base64(base64conf))
+    .field("content_string", &String::from_utf8(truncated_content(self.0.get_content()).to_vec()))
     .field("key", &self.0.get_key().to_base64(base64conf))
     .field("sig", &self.0.get_sig().to_base64(base64conf))
     .field("kind ", &self.0.get_algo_key().to_base64(base64conf))
     .finish()
 
+  }
+}
+
+#[inline]
+fn truncated_content ( cont : &[u8])-> &[u8] {
+  if cont.len() > 300 {
+    &cont[..300]
+  } else {
+    cont
   }
 }
 

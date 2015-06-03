@@ -91,9 +91,9 @@ impl StripleKind for Rsa2048Sha512 {
   type D = SHA512KD;
   type S = Rsa2048;
   fn get_algo_key() -> &'static [u8] {
-      match *stripledata::KIND {
+      match *stripledata::KINDIDS {
         Some (ref kinds) => {
-          &kinds.rsa2048Sha512.0.id[..]
+          &kinds.rsa2048Sha512[..]
         },
         None => stripledata::RSA2048SHA512KEY,
       }

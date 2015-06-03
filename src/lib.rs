@@ -20,6 +20,7 @@ extern crate num;
 extern crate rustc_serialize;
 
 pub mod striple;
+pub mod anystriple;
 pub mod storage;
 #[cfg(feature="public_crypto")]
 mod public;

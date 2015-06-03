@@ -170,9 +170,9 @@ fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
     type D = IdentityKD;
     type S = PubSign<Ripemd>;
     fn get_algo_key() -> &'static [u8] {
-      match *stripledata::KIND {
+      match *stripledata::KINDIDS {
         Some (ref kinds) => {
-          &kinds.pubripemd.0.id[..]
+          &kinds.pubripemd[..]
         },
         None => stripledata::PUBRIPEMKEY,
       }
@@ -183,9 +183,9 @@ fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
     type D = IdentityKD;
     type S = PubSign<Sha512>;
      fn get_algo_key() -> &'static [u8] {
-      match *stripledata::KIND {
+      match *stripledata::KINDIDS {
         Some (ref kinds) => {
-          &kinds.pubsha512.0.id[..]
+          &kinds.pubsha512[..]
         },
         None => stripledata::PUBSHA512KEY,
       }
@@ -197,9 +197,9 @@ fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
     type D = IdentityKD;
     type S = PubSign<Sha256>;
      fn get_algo_key() -> &'static [u8] {
-      match *stripledata::KIND {
+      match *stripledata::KINDIDS {
         Some (ref kinds) => {
-          &kinds.pubsha256.0.id[..]
+          &kinds.pubsha256[..]
         },
         None => stripledata::PUBSHA256KEY,
       }
