@@ -1,4 +1,9 @@
 //! basic storage for Striple and OwnedStriple to file
+//! TODO add pbk challenge (rand byte two time encoded) 
+//! in header to fail on open or only rd byte encoded 
+//! (see if two time same thing) TODO find better scheme 
+//! (byte jumping to a given 0 byte (random n time)).
+//!
 
 #[cfg(feature="opensslpbkdf2")]
 extern crate openssl;
@@ -8,17 +13,13 @@ extern crate rand;
 
 use std::fmt::{Debug};
 use std::iter::Iterator;
-use std::marker::PhantomData;
-use std::fs::File;
-use std::io::{Write,Read,Seek,SeekFrom,Result,Error,ErrorKind};
+use std::io::{Read,Write,Seek,SeekFrom,Result,Error,ErrorKind};
 use std::io::{stdin,BufRead};
-use striple::{Striple,OwnedStripleIf,StripleIf,StripleKind,xtendsize,xtendsizeread,xtendsizedec,AsStriple,StripleRef};
+use striple::{Striple,StripleIf,StripleKind,xtendsize,xtendsizeread,xtendsizedec,StripleRef};
+use std::marker::PhantomData;
 use striple::Error as StripleError;
 use striple::striple_copy_dser;
 use striple::striple_dser;
-//use striple::copy_builder_id;
-use striple::ref_builder_id_copy;
-use std::ptr::copy_nonoverlapping;
 use std::result::Result as StdResult;
 use num::traits::ToPrimitive;
 
@@ -53,6 +54,12 @@ pub enum $en {
 }
 
 impl StorageCypher for $en {
+  #[inline]
+  fn get_cypher_header (&self) -> Vec<u8> {
+    match self {
+      $( & $en::$st(ref i) => i.get_cypher_header(), )*
+    }
+  }
   #[inline]
   fn get_id_val (&self) -> usize {
     match self {
@@ -130,7 +137,7 @@ impl Pbkdf2 {
   }
 
   pub fn new (pass : String, iter : usize, osalt : Option<Vec<u8>>) -> Pbkdf2 {
-    let mut crypter = Crypter::new(Type::AES_256_CBC);
+    let crypter = Crypter::new(Type::AES_256_CBC);
     let salt = match osalt {
       Some(s) => s,
       None => {
@@ -179,6 +186,9 @@ impl StorageCypher for Pbkdf2 {
     result.push_all(&self.crypter.finalize());
     result
   }
+  // TODO no way of knowing if decrypt fail until trying to sign
+  // That's bad design!! TODO maybe include an encrypted stuff in header to check key on load
+  //
   fn decrypt (&self, pk : &[u8]) -> Vec<u8> {
     let iv = &pk[..self.keylength];
     let enc = &pk[self.keylength..];
@@ -192,10 +202,10 @@ impl StorageCypher for Pbkdf2 {
 impl StorageCypher for RemoveKey {
   #[inline]
   fn get_id_val (&self) -> usize { 0 }
-  fn encrypt (&self, pk : &[u8]) -> Vec<u8> {
+  fn encrypt (&self, _ : &[u8]) -> Vec<u8> {
     vec!()
   }
-  fn decrypt (&self, pk : &[u8]) -> Vec<u8> {
+  fn decrypt (&self, _ : &[u8]) -> Vec<u8> {
     vec!()
   }
 }
@@ -219,7 +229,7 @@ pub fn write_striple
    W  : Write,
     > (cypher : & SC, striple : &S, owned : Option<&[u8]>,  dest : &mut W) -> Result<()> {
       // Tag as normal writing
-      dest.write(&[0]);
+      try!(dest.write(&[0]));
       match owned {
         Some(pri) => {
           let encprikey = cypher.encrypt(pri);
@@ -245,7 +255,7 @@ pub fn read_striple
     > (cypher : &SC, from : &mut R, copy_builder : B) -> Result<(T,Option<Vec<u8>>)>
   where B : Fn(&[u8], StripleRef<SK>) -> StdResult<T, StripleError> {
   let tag = &mut [0];
-  from.read(tag);
+  try!(from.read(tag));
   if tag[0] != 0 {
     return Err(Error::new(ErrorKind::InvalidInput, "unknown striple tag"));
   };
@@ -284,7 +294,7 @@ pub fn read_striple_copy
     > (cypher : &SC, from : &mut R, copy_builder : B) -> Result<(T,Option<Vec<u8>>)>
   where B : Fn(&[u8], Striple<SK>) -> StdResult<T, StripleError>{
   let tag = &mut [0];
-  from.read(tag);
+  try!(from.read(tag));
   if tag[0] != 0 {
     return Err(Error::new(ErrorKind::InvalidInput, "unknown striple tag"));
   };
@@ -347,12 +357,12 @@ pub fn write_striple_file
 }
 
 /// To read striple only, do not use for writing striple as possible loss of key
-pub fn initNoReadKey<R : Read> (file : &mut R, _ : ()) -> Result<RemoveKey> {
+pub fn init_noread_key<R : Read> (file : &mut R, _ : ()) -> Result<RemoveKey> {
   let _ = try!(xtendsizeread(file, 1));
   Ok(RemoveKey)
 }
 
-pub fn initNoCypher<R : Read> (file : &mut R, _ : ()) -> Result<NoCypher> {
+pub fn init_no_cipher<R : Read> (file : &mut R, _ : ()) -> Result<NoCypher> {
   let idcypher = try!(xtendsizeread(file, 1));
   match idcypher {
       0 => Ok(NoCypher),
@@ -360,17 +370,17 @@ pub fn initNoCypher<R : Read> (file : &mut R, _ : ()) -> Result<NoCypher> {
   }
 }
 #[cfg(feature="opensslpbkdf2")]
-pub fn initAnyCypherStdIn<R: Read> (file : &mut R, _ : ()) -> Result<AnyCyphers> {
+pub fn init_any_cipher_stdin<R: Read> (file : &mut R, _ : ()) -> Result<AnyCyphers> {
   let idcypher = try!(xtendsizeread(file, 1));
   match idcypher {
       0 => Ok(AnyCyphers::NoCypher(NoCypher)),
       1 => {
         println!("Reading protected storage, please input passphrase ?");
         let mut pass = String::new();
-        let mut tstdin = stdin();
+        let tstdin = stdin();
         let mut stdin = tstdin.lock();
  
-        stdin.read_line(&mut pass);
+        try!(stdin.read_line(&mut pass));
         // remove terminal \n
         pass.pop();
  
@@ -382,7 +392,7 @@ pub fn initAnyCypherStdIn<R: Read> (file : &mut R, _ : ()) -> Result<AnyCyphers>
   }
 }
 #[cfg(feature="opensslpbkdf2")]
-pub fn initAnyCypherWithPass<R: Read> (file : &mut R, pass : String) -> Result<AnyCyphers> {
+pub fn init_any_cypher_with_pass<R: Read> (file : &mut R, pass : String) -> Result<AnyCyphers> {
   let idcypher = try!(xtendsizeread(file, 1));
   match idcypher {
       0 => Ok(AnyCyphers::NoCypher(NoCypher)),
@@ -396,7 +406,7 @@ pub fn initAnyCypherWithPass<R: Read> (file : &mut R, pass : String) -> Result<A
 }
 
 #[cfg(not(feature="opensslpbkdf2"))]
-pub fn initAnyCypherStdIn<R: Read> (file : &mut R, _ : ()) -> Result<AnyCyphers> {
+pub fn init_any_cipher_stdin<R: Read> (file : &mut R, _ : ()) -> Result<AnyCyphers> {
   let idcypher = try!(xtendsizeread(file, 1));
   match idcypher {
       0 => Ok(AnyCyphers::NoCypher(NoCypher)),
@@ -438,7 +448,7 @@ pub fn skip_striple (&mut self) -> Result<()> {
   let from = &mut self.0;
  
   let tag = &mut [0];
-  from.read(tag);
+  try!(from.read(tag));
   if tag[0] != 0 {
     return Err(Error::new(ErrorKind::InvalidInput, "unknown striple tag"));
   };
@@ -475,7 +485,7 @@ pub fn skip_striple (&mut self) -> Result<()> {
     let mut from = &mut self.0;
     let posret = try!(from.seek(SeekFrom::Current(0)));
     let tag = &mut [0];
-    from.read(tag);
+    try!(from.read(tag));
     if tag[0] != 0 {
       return Err(Error::new(ErrorKind::InvalidInput, "unknown striple tag"));
     };
@@ -540,22 +550,15 @@ pub mod test {
   use striple::Striple;
 //  use striple::copy_builder_id;
   use striple::ref_builder_id_copy;
-  use striple::StripleIf;
-  use striple::AsStriple;
-  use striple::StripleKind;
   use striple::NoKind;
-  use striple::IDDerivation;
-  use striple::SignatureScheme;
-  use storage::{NoCypher,write_striple,read_striple,write_striple_file_ref,FileStripleIterator,initNoCypher,initAnyCypherWithPass};
+  use storage::{NoCypher,write_striple,read_striple,write_striple_file_ref,FileStripleIterator,init_no_cipher,init_any_cypher_with_pass};
   use striple::test::{sampleStriple1,sampleStriple2,random_bytes,compare_striple};
-  use std::io::{Write,Read,Cursor,Seek,SeekFrom};
-  use std::marker::PhantomData;
-  use std::slice::Iter;
+  use std::io::{Cursor,Seek,SeekFrom};
   use std::io::Result as IOResult;
 
   #[test]
   fn test_striple_enc_dec () {
-    let mut tmpvec : Vec<u8> = Vec::new();
+    let tmpvec : Vec<u8> = Vec::new();
     let mut buf = Cursor::new(tmpvec);
     let striple1 = sampleStriple1();
     let striple2 = sampleStriple2();
@@ -584,7 +587,7 @@ pub mod test {
 
   #[test]
   fn test_striple_enc_dec_file () {
-    let mut tmpvec : Vec<u8> = Vec::new();
+    let tmpvec : Vec<u8> = Vec::new();
     let mut buf = Cursor::new(tmpvec);
     let striple1 = sampleStriple1();
     let striple2 = sampleStriple2();
@@ -594,8 +597,8 @@ pub mod test {
     vecst.push((&striple2,Some(&pkey[..])));
     let wr = write_striple_file_ref(&NoCypher, &mut vecst.iter().map(|p|(p.0,p.1)), &mut buf);
     assert!(wr.is_ok());
-    let mut rit : IOResult<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>> = FileStripleIterator::init(buf, ref_builder_id_copy, initAnyCypherWithPass, "pass".to_string()); 
-    //let mut rit : IOResult<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>> = FileStripleIterator::init(buf, ref_builder_id_copy, initNoCypher, ()); 
+    let rit : IOResult<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>> = FileStripleIterator::init(buf, ref_builder_id_copy, init_any_cypher_with_pass, "pass".to_string()); 
+    //let mut rit : IOResult<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>> = FileStripleIterator::init(buf, ref_builder_id_copy, init_no_cipher, ()); 
     assert!(rit.is_ok());
     let mut it = rit.unwrap();
  

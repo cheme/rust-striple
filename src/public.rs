@@ -47,7 +47,7 @@ impl<H : CHash> PublicScheme for PubSign<H> {}
 pub mod public_crypto {
   extern crate crypto;
   use striple::{StripleKind,IdentityKD};
-  use stripledata::PUBRIPEMKEY;
+  use stripledata;
   use self::crypto::digest::Digest;
   use self::crypto::ripemd160::Ripemd160;
   use super::{PubSign,CHash};
@@ -63,7 +63,12 @@ pub mod public_crypto {
     type S = PubSign<Ripemd>;
     
     fn get_algo_key() -> &'static [u8] {
-      PUBRIPEMKEY
+      match *stripledata::KINDIDS {
+        Some (ref kinds) => {
+          &kinds.pubripemd[..]
+        },
+        None => stripledata::PUBRIPEMKEY,
+      }
     }
   }
 

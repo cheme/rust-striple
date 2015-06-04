@@ -34,13 +34,8 @@ path = "examples/striple.rs"
 [dependencies]
 log = "0.3.1"
 lazy_static = "0.1.10"
-# TODO env_logger for test only??
-env_logger = "0.3.0"
 num = "0.1.24"
-# TODO conf for scheme + test only
 rand = "0.3.8"
-# TODO copy method or find alternatives
-byteorder = "0.3.9"
 
 [dependencies.rustc-serialize]
 version = "0.3.14"
@@ -63,8 +58,6 @@ version = "0.6.64"
 [dev-dependencies.docopt]
 version = "0.6.64"
 
-
-[dev-dependencies.rustc-serialize]
-version = "0.3.14"
-
+[dev-dependencies.env_logger]
+version = "0.3.0"
 

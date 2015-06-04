@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 
 use std::fs::File;
 use anystriple::{AnyStriple, copy_builder_any};
-use storage::{FileStripleIterator,initNoReadKey};
+use storage::{FileStripleIterator,init_noread_key};
 use std::io::Result as IOResult;
 use std::env;
 
@@ -48,7 +48,7 @@ pub struct KindStriples<K : StripleKind + Sized>{
   pub pubripemd : (Striple<K>, Vec<u8>),
   pub pubsha512 : (Striple<K>, Vec<u8>),
   pub pubsha256 : (Striple<K>, Vec<u8>),
-  pub rsa2048Sha512 : (Striple<K>, Vec<u8>),
+  pub rsa2048_sha512 : (Striple<K>, Vec<u8>),
   pub ecdsaripemd160 : (Striple<K>, Vec<u8>),
 }
 #[derive(Debug,Clone)]
@@ -56,7 +56,7 @@ pub struct KindStriplesIDs {
   pub pubripemd : Vec<u8>,
   pub pubsha512 : Vec<u8>,
   pub pubsha256 : Vec<u8>,
-  pub rsa2048Sha512 : Vec<u8>,
+  pub rsa2048_sha512 : Vec<u8>,
   pub ecdsaripemd160 : Vec<u8>,
 }
 
@@ -72,7 +72,7 @@ impl<K : StripleKind> Display for KindStriples<K> {
     .field("pubripemd", &format!("{}",UnsafeOwnedStripleDisp(&self.pubripemd)))
     .field("pubsha512", &format!("{}",UnsafeOwnedStripleDisp(&self.pubsha512)))
     .field("pubsha256", &format!("{}",UnsafeOwnedStripleDisp(&self.pubsha256)))
-    .field("rsa2048Sha512", &format!("{}",UnsafeOwnedStripleDisp(&self.rsa2048Sha512)))
+    .field("rsa2048_sha512", &format!("{}",UnsafeOwnedStripleDisp(&self.rsa2048_sha512)))
     .field("ecdsaripemd160", &format!("{}",UnsafeOwnedStripleDisp(&self.ecdsaripemd160)))
     .finish()
   }
@@ -91,20 +91,20 @@ impl<K : StripleKind> Display for BaseStriples<K> {
 
 #[cfg(feature="opensslrsa")]
 lazy_static!{
-pub static ref BASE : Option<BaseStriples<Rsa2048Sha512>> = initBaseStriple();
-pub static ref KIND : Option<KindStriples<Rsa2048Sha512>> = initKindStriple();
+pub static ref BASE : Option<BaseStriples<Rsa2048Sha512>> = init_base_striple();
+pub static ref KIND : Option<KindStriples<Rsa2048Sha512>> = init_kind_striple();
 }
 #[cfg(not(feature="opensslrsa"))]
 #[cfg(feature="cryptoecdsa")]
 lazy_static!{
-pub static ref BASE : Option<BaseStriples<EcdsaRipemd160>> = initBaseStriple();
-pub static ref KIND : Option<KindStriples<EcdsaRipemd160>> = initKindStriple();
+pub static ref BASE : Option<BaseStriples<EcdsaRipemd160>> = init_base_striple();
+pub static ref KIND : Option<KindStriples<EcdsaRipemd160>> = init_kind_striple();
 }
 #[cfg(not(feature="opensslrsa"))]
 #[cfg(not(feature="cryptoecdsa"))]
 lazy_static!{
-pub static ref BASE : Option<BaseStriples<NoKind>> = initBaseStriple();
-pub static ref KIND : Option<KindStriples<NoKind>> = initKindStriple();
+pub static ref BASE : Option<BaseStriples<NoKind>> = init_base_striple();
+pub static ref KIND : Option<KindStriples<NoKind>> = init_kind_striple();
 }
 
 #[cfg(feature="public_openssl")]
@@ -123,7 +123,7 @@ pub static ref PUBKIND : Option<KindStriples<NoKind>> = None;
 }
 
 lazy_static!{
-pub static ref KINDIDS : Option<KindStriplesIDs> = initKindStripleIDs();
+pub static ref KINDIDS : Option<KindStriplesIDs> = init_kind_striple_ids();
 }
 
 pub static PUBRIPEMKEY : &'static [u8] = &[128, 136, 74, 231, 134, 102, 111, 168, 123, 102, 154, 32, 53, 15, 250, 179, 54, 171, 54, 65, 184, 110, 152, 28, 84, 80, 17, 123, 79, 150, 127, 183, 17, 70, 236, 170, 236, 87, 252, 42, 15, 88, 218, 133, 203, 53, 151, 68, 175, 32, 221, 4, 68, 51, 208, 114, 235, 117, 1, 245, 2, 96, 25, 1];
@@ -133,22 +133,22 @@ pub static RSA2048SHA512KEY : &'static [u8] = &[86, 139, 16, 216, 242, 57, 38, 1
 pub static ECDSARIPEMD160KEY : &'static [u8] = &[45, 47, 149, 98, 71, 114, 204, 219, 38, 171, 163, 48, 251, 99, 44, 29, 103, 192, 30, 151, 244, 233, 229, 55, 61, 42, 114, 207, 78, 67, 246, 216, 77, 200, 42, 239, 90, 182, 25, 222, 198, 79, 182, 246, 223, 216, 168, 181, 181, 193, 252, 33, 51, 10, 167, 198, 82, 67, 111, 121, 187, 250, 221, 50];
 
 /// init base striple from file in env var
-pub fn initBaseStriple<SK : StripleKind> () -> Option<BaseStriples<SK>> {
+pub fn init_base_striple<SK : StripleKind> () -> Option<BaseStriples<SK>> {
   None
 }
 /// init base striple from file in env var
-pub fn initKindStriple<SK : StripleKind> () -> Option<KindStriples<SK>> {
+pub fn init_kind_striple<SK : StripleKind> () -> Option<KindStriples<SK>> {
   None
 }
 
 
 /// init base striple from file in env var
-pub fn initKindStripleIDs () -> Option<KindStriplesIDs> {
+pub fn init_kind_striple_ids () -> Option<KindStriplesIDs> {
 
   env::var("STRIPLE_BASE").ok().and_then(|path| match File::open(&path) {
     Ok(datafile) => {
       // get striple without key and without Kind (as we define it)
-      let mut rit : IOResult<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>> = FileStripleIterator::init(datafile, ref_builder_id_copy , &initNoReadKey, ());
+      let rit : IOResult<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>> = FileStripleIterator::init(datafile, ref_builder_id_copy , &init_noread_key, ());
       let res = rit.and_then(|mut it|{
         for _ in 0..6 {
           try!(it.skip_striple());
@@ -156,14 +156,14 @@ pub fn initKindStripleIDs () -> Option<KindStriplesIDs> {
         let pubripemd = it.next().unwrap().0.get_id().to_vec();
         let pubsha512 = it.next().unwrap().0.get_id().to_vec();
         let pubsha256 = it.next().unwrap().0.get_id().to_vec();
-        let rsa2048Sha512 = it.next().unwrap().0.get_id().to_vec();
+        let rsa2048_sha512 = it.next().unwrap().0.get_id().to_vec();
         let ecdsaripemd160 = it.next().unwrap().0.get_id().to_vec();
 
       Ok( KindStriplesIDs {
          pubripemd : pubripemd,
          pubsha512 : pubsha512,
          pubsha256 : pubsha256,
-         rsa2048Sha512 : rsa2048Sha512,
+         rsa2048_sha512 : rsa2048_sha512,
          ecdsaripemd160 : ecdsaripemd160,
       })
       });

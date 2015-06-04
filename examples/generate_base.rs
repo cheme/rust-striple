@@ -135,7 +135,6 @@ fn main() {
 // End Temporary code ----------------
 
   write_striple_with_enc(&cypher,&pribase.root.0,Some(&pribase.root.1),&mut datafile, &privateEnc).unwrap();
-
   write_striple_with_enc(&cypher,&pubcat,None,&mut datafile, &publicEnc).unwrap();
   write_striple_with_enc(&cypher,&pubkind,None,&mut datafile, &publicEnc).unwrap();
  
@@ -145,13 +144,13 @@ fn main() {
   write_striple_with_enc(&cypher,&prikinds.pubripemd.0,Some(&prikinds.pubripemd.1),&mut datafile, &privateEnc).unwrap();
   write_striple_with_enc(&cypher,&prikinds.pubsha512.0,Some(&prikinds.pubsha512.1),&mut datafile, &privateEnc).unwrap();
   write_striple_with_enc(&cypher,&prikinds.pubsha256.0,Some(&prikinds.pubsha256.1),&mut datafile, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.rsa2048Sha512.0,Some(&prikinds.rsa2048Sha512.1),&mut datafile, &privateEnc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.rsa2048_sha512.0,Some(&prikinds.rsa2048_sha512.1),&mut datafile, &privateEnc).unwrap();
   write_striple_with_enc(&cypher,&prikinds.ecdsaripemd160.0,Some(&prikinds.ecdsaripemd160.1),&mut datafile, &privateEnc).unwrap();
   write_striple_with_enc(&cypher,&pubstriples.kind,None,&mut datafile, &publicEnc).unwrap();
   write_striple_with_enc(&cypher,&pubstriples.pubripemd,None,&mut datafile, &publicEnc).unwrap();
   write_striple_with_enc(&cypher,&pubstriples.pubsha512,None,&mut datafile, &publicEnc).unwrap();
   write_striple_with_enc(&cypher,&pubstriples.pubsha256,None,&mut datafile, &publicEnc).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.rsa2048Sha512,None,&mut datafile, &publicEnc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.rsa2048_sha512,None,&mut datafile, &publicEnc).unwrap();
   write_striple_with_enc(&cypher,&pubstriples.ecdsaripemd160,None,&mut datafile, &publicEnc).unwrap();
 
 }
@@ -199,7 +198,7 @@ fn base_gen(cat : Vec<u8>, kind : Vec<u8>) -> Option<(BaseStriples<Rsa2048Sha512
 }
 #[cfg(feature="opensslrsa")]
 fn get_base_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
-  pri.rsa2048Sha512.0.get_id().to_vec()
+  pri.rsa2048_sha512.0.get_id().to_vec()
 }
  
 #[cfg(not(feature="public_openssl"))]
@@ -326,7 +325,7 @@ fn gen_kind<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel
     vec!(),
     "Public Sha512 derivation".as_bytes().to_vec(),
     );
- let rsa2048Sha512 : (Striple<K>, Vec<u8>) = Striple::new(
+ let rsa2048_sha512 : (Striple<K>, Vec<u8>) = Striple::new(
     vec!(),
     Some(&ownedVKind),
     Some(pri.libkind.0.get_about().to_vec()),
@@ -345,7 +344,7 @@ fn gen_kind<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel
      pubripemd : pubripem,
      pubsha512 : pubsha512,
      pubsha256 : pubsha256,
-     rsa2048Sha512 : rsa2048Sha512,
+     rsa2048_sha512 : rsa2048_sha512,
      ecdsaripemd160 : ecdsaripemd160,
    })
 }

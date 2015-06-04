@@ -889,8 +889,8 @@ impl ErrorTrait for Error {
 impl Display for Error {
   fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
     let kind = format!("{:?} : ",self.1);
-    ftr.write_str(&kind);
-    ftr.write_str(&self.0);
+    try!(ftr.write_str(&kind));
+    try!(ftr.write_str(&self.0));
     Ok(())
 
   }
@@ -975,7 +975,6 @@ pub fn xtendsizeread<R : Read>(r : &mut R, nbbyte : usize) -> IOResult<usize> {
   if nbbyte == 0 {
     return Ok(0);
   };
-  let mut res : usize = 0;
   let mut nbbytes = nbbyte;
   let mut buf = vec![0; nbbytes];
   try!(r.read(&mut buf));
@@ -994,7 +993,7 @@ pub fn xtendsizeread<R : Read>(r : &mut R, nbbyte : usize) -> IOResult<usize> {
     };
     nbbytes =  nbbytes + addbytes;
   }
-  res = unsafe {
+  Ok( unsafe {
   let mut v : [u8;8] = mem::transmute(0usize);
   debug!("DEBUG_bef {:?}, {:?} !!!",v, nbbytes);
   if nbbytes <= 8 {
@@ -1010,8 +1009,7 @@ pub fn xtendsizeread<R : Read>(r : &mut R, nbbyte : usize) -> IOResult<usize> {
     // TODO change to error at least + half size lost here
     0
   }
-  };
-  Ok(res)
+  } )
 }
 
 
@@ -1149,7 +1147,7 @@ impl SignatureScheme for NoSigCh {
   fn sign_content(_ : &[u8], _ : &[u8]) -> Vec<u8> {
     vec!()
   }
-  fn check_content(publ : &[u8],_ : &[u8],_ : &[u8]) -> bool {
+  fn check_content(_ : &[u8],_ : &[u8],_ : &[u8]) -> bool {
     false
   }
   fn new_keypair() -> (Vec<u8>, Vec<u8>) {
@@ -1170,8 +1168,8 @@ pub fn as_kind<'a, SK : StripleKind> (nk : &'a Striple<NoKind>) -> &'a Striple<S
 /// NoKind striple could be set a kind (unsafe cast but kind is phantom data)
 pub fn mut_as_kind<'a,  SK : StripleKind> (nk : &'a mut Striple<NoKind>) -> &'a mut Striple<SK> {
   unsafe {
-    let mut ptr = nk as *mut Striple<NoKind>;
-    let mut sptr : *mut Striple<SK> = mem::transmute(ptr);
+    let ptr = nk as *mut Striple<NoKind>;
+    let sptr : *mut Striple<SK> = mem::transmute(ptr);
     sptr.as_mut().unwrap()
   }
 }
@@ -1197,8 +1195,8 @@ pub fn ref_as_kind<'a, SK : StripleKind> (nk : &'a StripleRef<'a,NoKind>) -> &'a
 /// NoKind striple could be set a kind (unsafe cast but kind is phantom data)
 pub fn ref_mut_as_kind<'a,  SK : StripleKind> (nk : &'a mut StripleRef<'a, NoKind>) -> &'a mut StripleRef<'a,SK> {
   unsafe {
-    let mut ptr = nk as *mut StripleRef<'a,NoKind>;
-    let mut sptr : *mut StripleRef<'a,SK> = mem::transmute(ptr);
+    let ptr = nk as *mut StripleRef<'a,NoKind>;
+    let sptr : *mut StripleRef<'a,SK> = mem::transmute(ptr);
     sptr.as_mut().unwrap()
   }
 }
@@ -1639,22 +1637,22 @@ pub struct UnsafeOwnedStripleDisp<'a, S : 'a + OwnedStripleIf>(pub &'a S);
 impl<'a,  S : StripleIf> Display for StripleDisp<'a, S> {
   fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
     ftr.debug_struct("")
-    .field("id", &self.0.get_id().to_base64(base64conf))
-    .field("from", &self.0.get_from().to_base64(base64conf))
-    .field("about", &self.0.get_about().to_base64(base64conf))
+    .field("id", &self.0.get_id().to_base64(BASE64CONF))
+    .field("from", &self.0.get_from().to_base64(BASE64CONF))
+    .field("about", &self.0.get_about().to_base64(BASE64CONF))
     .field("content_ids", &{
       let mut catids = "[".to_string();
       for id in self.0.get_content_ids().iter() {
-        catids = catids + &id.to_base64(base64conf)[..] + ",";
+        catids = catids + &id.to_base64(BASE64CONF)[..] + ",";
       }
       catids + "]"
       }
     )
-    .field("content", &truncated_content(self.0.get_content()).to_base64(base64conf))
+    .field("content", &truncated_content(self.0.get_content()).to_base64(BASE64CONF))
     .field("content_string", &String::from_utf8(truncated_content(self.0.get_content()).to_vec()))
-    .field("key", &self.0.get_key().to_base64(base64conf))
-    .field("sig", &self.0.get_sig().to_base64(base64conf))
-    .field("kind ", &self.0.get_algo_key().to_base64(base64conf))
+    .field("key", &self.0.get_key().to_base64(BASE64CONF))
+    .field("sig", &self.0.get_sig().to_base64(BASE64CONF))
+    .field("kind ", &self.0.get_algo_key().to_base64(BASE64CONF))
     .finish()
 
   }
@@ -1684,13 +1682,13 @@ impl<'a, S : OwnedStripleIf> Display  for UnsafeOwnedStripleDisp<'a,S> {
   fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
     ftr.debug_struct("")
     .field("striple", &format!("{}",StripleDisp(self.0)))
-    .field("PrivateKey", &self.0.private_key_ref().to_base64(base64conf))
+    .field("PrivateKey", &self.0.private_key_ref().to_base64(BASE64CONF))
     .finish()
   }
 }
 
 #[cfg(feature="serialize")]
-pub static base64conf : base64::Config = base64::Config {
+pub static BASE64CONF : base64::Config = base64::Config {
     char_set : base64::CharacterSet::Standard,
     newline : base64::Newline::LF,
     pad : true,

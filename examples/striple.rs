@@ -21,6 +21,7 @@ extern crate striple;
 extern crate num;
 #[cfg(feature="serialize")]
 extern crate rustc_serialize;
+extern crate env_logger;
 
 #[cfg(feature="serialize")]
 use rustc_serialize::base64::ToBase64;
@@ -31,14 +32,20 @@ use std::fs;
 use std::io::{Read,Write,Seek,SeekFrom};
 use striple::anystriple::{AnyStriple, copy_builder_any};
 use striple::striple::{NoKind,StripleDisp, StripleIf,Striple, StripleRef};
-use striple::striple::base64conf;
+#[cfg(feature="serialize")]
+use striple::striple::BASE64CONF;
 use striple::striple::Error as StripleError;
 use striple::storage::{FileStripleIterator,StorageCypher,write_striple,Pbkdf2,AnyCyphers};
 use std::io::Result as IOResult;
 use std::result::Result as StdResult;
 use std::io::{stdin,BufRead};
 use num::traits::ToPrimitive;
-use striple::storage::{write_striple_file,write_striple_file_ref,NoCypher,RemoveKey,initAnyCypherStdIn,initAnyCypherWithPass,initNoReadKey};
+use striple::storage::{write_striple_file,write_striple_file_ref,NoCypher,RemoveKey,init_any_cipher_stdin,init_any_cypher_with_pass,init_noread_key};
+
+
+
+
+#[cfg(feature="serialize")]
 docopt!(Args derive Debug, "
 Usage: 
 striple disp (-i <file> | - ) [--inpass <inpass>]  [-x <ix>]...
@@ -46,7 +53,7 @@ striple id64 [from | about | content | kind | enc] (-i <file> | - ) [--inpass <i
 striple cp (-i <file> | - ) [--inpass <inpass>] [-x <ix>]... (-o <file>) [--outpass <outpass>] [--ox <outix>]
 striple rm -i <file> [--inpass <inpass>] [-x <ix>]...
 striple rewrite  (-i <file> | - ) [--inpass <inpass>] [-o <file>] [-c <cipher>] [--outpass <outpass>]
-striple check (-i <file> | - ) (-x <ix>) [--fromfile <fromfile>] [-x <ix>]...
+striple check (-i <file> | - ) (-x <ix>) [--inpass <inpass>] [--fromfile <fromfile>] [-x <ix>]...
 striple create [--encfile <encfile> -x <ix> | --encid <encid>] (--kindfile <kindfile> -x <ix> | --kindid <kindid>) [--fromfile <fromfile> -x <ix> [--frompass <frompass>]] [--aboutfile <aboutfile> -x <ix> | --aboutid <aboutid>] (--contentfile <contentfile> | --content <content> | (--contentid <contentid>)... | - ) [-o <file>] [-c <cipher>] [--outpass <outpass>] [--ox <outix>]
 
 striple -h
@@ -68,20 +75,21 @@ Options:
 
 fn main() {
 
-  // TODO activate env_logger!!!
-  //
-  let args: Args = Args::docopt().decode().unwrap_or_else(|e| e.exit());
-  run(args)
+  // activate env_logger
+  env_logger::init().unwrap();
+  
+  run()
 }
 
 #[cfg(not(feature="serialize"))]
-fn run(args : Args) {
-  println!("{:?}", args);
+fn run() {
+//  println!("{:?}", args);
   println!("missing required features");
 }
 #[cfg(feature="serialize")]
-fn run(args : Args) {
-  println!("{:?}", args);
+fn run() {
+  let args: Args = Args::docopt().decode().unwrap_or_else(|e| e.exit());
+//  println!("{:?}", args);
   if !args.cmd_create {
   let readseek = if args.flag_in.len() > 0 {
     File::open(&args.flag_in).unwrap()
@@ -90,9 +98,9 @@ fn run(args : Args) {
     return()
   };
   let mut rit :  IOResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>>  = if args.flag_inpass.len() > 0 {
-    FileStripleIterator::init(readseek, copy_builder_any, &initAnyCypherWithPass, args.flag_inpass.clone())
+    FileStripleIterator::init(readseek, copy_builder_any, &init_any_cypher_with_pass, args.flag_inpass.clone())
   } else {
-    FileStripleIterator::init(readseek, copy_builder_any, &initAnyCypherStdIn, ())
+    FileStripleIterator::init(readseek, copy_builder_any, &init_any_cipher_stdin, ())
   };
   let mut it = rit.unwrap();
   // default single ix to first striple (usecase is file with one striple only)
@@ -121,23 +129,23 @@ fn run(args : Args) {
      //id64
     let s : IOResult<(AnyStriple,Option<Vec<u8>>)> = it.get(ix - 1);
      match (args.cmd_from, args.cmd_about, args.cmd_content,args.cmd_kind,args.cmd_enc) {
-       (true,_,_,_,_) => print!("{}", s.unwrap().0.get_from().to_vec().to_base64(base64conf)),
-       (_,true,_,_,_) => print!("{}", s.unwrap().0.get_about().to_vec().to_base64(base64conf)),
+       (true,_,_,_,_) => print!("{}", s.unwrap().0.get_from().to_vec().to_base64(BASE64CONF)),
+       (_,true,_,_,_) => print!("{}", s.unwrap().0.get_about().to_vec().to_base64(BASE64CONF)),
        (_,_,true,_,_) => {
          let ids : Vec<&[u8]> = s.as_ref().unwrap().0.get_content_ids();
          if args.flag_ix.len() > 1 {
            if ids.len() > args.flag_ix[1] {
-             print!("{}", ids[args.flag_ix[1]].to_vec().to_base64(base64conf))
+             print!("{}", ids[args.flag_ix[1]].to_vec().to_base64(BASE64CONF))
            }
          } else {
            if ids.len() > 0 {
-             print!("{}", ids[0].to_vec().to_base64(base64conf))
+             print!("{}", ids[0].to_vec().to_base64(BASE64CONF))
            }
          }
        },
-       (_,_,_,true,_) => print!("{}", s.unwrap().0.get_algo_key().to_vec().to_base64(base64conf)),
-       (_,_,_,_,true) => print!("{}", s.unwrap().0.get_enc().to_vec().to_base64(base64conf)),
-       _ => print!("{}", s.unwrap().0.get_id().to_vec().to_base64(base64conf)),
+       (_,_,_,true,_) => print!("{}", s.unwrap().0.get_algo_key().to_vec().to_base64(BASE64CONF)),
+       (_,_,_,_,true) => print!("{}", s.unwrap().0.get_enc().to_vec().to_base64(BASE64CONF)),
+       _ => print!("{}", s.unwrap().0.get_id().to_vec().to_base64(BASE64CONF)),
      }
   },
 
@@ -148,7 +156,7 @@ fn run(args : Args) {
      } else {
        let mut v = Vec::new();
        for ix in args.flag_ix.iter() {
-         v.push(it.get(*ix).unwrap());
+         v.push(it.get(*ix -1).unwrap());
        };
        copy_vec_oriter(&args, v, Some(it.1));
      };
@@ -190,10 +198,10 @@ fn run(args : Args) {
   },
    (_,_,_,_,_,true) => {
      //check
-     let to_check = it.get(ix).unwrap().0;
+     let to_check = it.get(ix - 1).unwrap().0;
      let fromid = to_check.get_from();
      let mut fromfile = File::open(&args.arg_fromfile).unwrap();
-     let mut rfromit = FileStripleIterator::init(fromfile, copy_builder_any, &initNoReadKey, ());
+     let mut rfromit = FileStripleIterator::init(fromfile, copy_builder_any, &init_noread_key, ());
      let mut fromit = rfromit.unwrap();
      let ofrom = if args.flag_ix.len() > 1 {
        fromit.get(args.flag_ix[1] - 1).ok()
@@ -225,7 +233,7 @@ fn run(args : Args) {
    } else {
      if args.flag_encfile {
      let mut encfile = File::open(&args.arg_encfile).unwrap();
-     let mut encit = FileStripleIterator::init(encfile, copy_builder_any, &initNoReadKey, ()).unwrap();
+     let mut encit = FileStripleIterator::init(encfile, copy_builder_any, &init_noread_key, ()).unwrap();
      let enc = encit.get(args.flag_ix[ixnb] - 1).unwrap();
      ixnb += 1;
      enc.0.get_id().to_vec()
@@ -237,21 +245,22 @@ fn run(args : Args) {
     args.arg_kindid.from_base64().unwrap()
    } else {
      let mut kindfile = File::open(&args.arg_kindfile).unwrap();
-     let mut kindit = FileStripleIterator::init(kindfile, copy_builder_any, &initNoReadKey, ()).unwrap();
+     let mut kindit = FileStripleIterator::init(kindfile, copy_builder_any, &init_noread_key, ()).unwrap();
      let kind = kindit.get(args.flag_ix[ixnb] - 1).unwrap();
      ixnb += 1;
      kind.0.get_id().to_vec()
    };
- 
-   let fromix = args.flag_ix[ixnb] - 1;
+   let fromix = if args.flag_fromfile {
    ixnb += 1;
+   args.flag_ix[ixnb - 1] - 1
+   }else{0};
 
    let aboutid = if args.flag_aboutid {
     Some(args.arg_aboutid.from_base64().unwrap())
    } else {
      if args.flag_aboutfile {
      let mut aboutfile = File::open(&args.arg_aboutfile).unwrap();
-     let mut aboutit = FileStripleIterator::init(aboutfile, copy_builder_any, &initNoReadKey, ()).unwrap();
+     let mut aboutit = FileStripleIterator::init(aboutfile, copy_builder_any, &init_noread_key, ()).unwrap();
      let about = aboutit.get(args.flag_ix[ixnb] - 1).unwrap();
      ixnb += 1;
      Some(about.0.get_id().to_vec())
@@ -270,17 +279,18 @@ fn run(args : Args) {
    } else {
     args.flag_content.from_base64().unwrap()
    };
-   let ofrom = if !args.flag_fromfile {
+   let ofrom = if args.flag_fromfile {
      let mut fromfile = File::open(&args.arg_fromfile).unwrap();
      let mut rfromit = if args.flag_frompass {
-       FileStripleIterator::init(fromfile, copy_builder_any, &initAnyCypherWithPass, args.arg_frompass.clone())
+       FileStripleIterator::init(fromfile, copy_builder_any, &init_any_cypher_with_pass, args.arg_frompass.clone())
      } else {
-       FileStripleIterator::init(fromfile, copy_builder_any, &initAnyCypherStdIn, ())
+       FileStripleIterator::init(fromfile, copy_builder_any, &init_any_cipher_stdin, ())
      };
      let mut fromit = rfromit.unwrap();
      let from = fromit.get(fromix).unwrap();
      if from.0.is_public() {
-        Some((from.0, vec!()))
+       let pk = from.0.get_key().to_vec();
+        Some((from.0, pk))
      } else {
        match from.1 {
          Some(pass) => {
@@ -304,10 +314,16 @@ fn run(args : Args) {
       contentids,
       content,
    ).unwrap();
+   if args.flag_out.len() > 0 {
    let mut contents = Vec::new();
    contents.push((ownedStriple.0,Some(ownedStriple.1)));
    copy_vec_oriter(&args, contents, None);
-//striple create [--encfile <encfile> -x <ix> | --encid <encid>] (--kindfile <kindfile> -x <ix> | --kindid <kindid>) [--fromfile <fromfile> -x <ix> [--frompass <frompass>]] [--aboutfile <aboutfile> -x <ix> | --aboutid <aboutid>] (--contentfile <contentfile> | --content <content> | (--contentid <contentid>)... | - ) [-o <file>] [--outpass <outpass>] [--ox <outix>]
+   } else {
+     // out on stdout as base64 : key then striple
+     println!("{}", ownedStriple.1.to_base64(BASE64CONF));
+     print!("{}", ownedStriple.0.striple_ser().to_base64(BASE64CONF));
+     
+   }
   }
 
 
@@ -315,6 +331,7 @@ fn run(args : Args) {
 }
 
 
+#[cfg(feature="serialize")]
 fn show_it(toshow : (AnyStriple,Option<Vec<u8>>), ix : usize) {
   if ix == 0 {
     println!("- : {}", StripleDisp(&toshow.0));
@@ -368,6 +385,7 @@ fn initpkbdf2 (_ : String) -> RemoveKey {
 }
 
 
+#[cfg(feature="serialize")]
 fn copy_iter<B> (args : &Args, it :FileStripleIterator<NoKind, AnyStriple, File, AnyCyphers, B>)
 where B :  Fn(&[u8], StripleRef<NoKind>) -> StdResult<AnyStriple, StripleError>
   {
@@ -376,9 +394,9 @@ where B :  Fn(&[u8], StripleRef<NoKind>) -> StdResult<AnyStriple, StripleError>
     let initiallen = out.metadata().unwrap().len();
     if initiallen > 0 {
       let mut rot : IOResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>>  = if args.flag_outpass.len() > 0 {
-         FileStripleIterator::init(out, copy_builder_any, &initAnyCypherWithPass, args.flag_outpass.clone())
+         FileStripleIterator::init(out, copy_builder_any, &init_any_cypher_with_pass, args.flag_outpass.clone())
       } else {
-         FileStripleIterator::init(out, copy_builder_any, &initAnyCypherStdIn, ())
+         FileStripleIterator::init(out, copy_builder_any, &init_any_cipher_stdin, ())
       };
       let mut ot = rot.unwrap();
       let splitpos = if args.flag_ox > 0 {
@@ -406,6 +424,7 @@ where B :  Fn(&[u8], StripleRef<NoKind>) -> StdResult<AnyStriple, StripleError>
     };
 }
 
+#[cfg(feature="serialize")]
 fn copy_vec_oriter (args : &Args, contents : Vec<(AnyStriple,Option<Vec<u8>>)>, it : Option<AnyCyphers>)
   {
     let mut out = OpenOptions::new().read(true).write(true).append(true).truncate(false).create(true).open(&args.flag_out).unwrap();
@@ -413,9 +432,9 @@ fn copy_vec_oriter (args : &Args, contents : Vec<(AnyStriple,Option<Vec<u8>>)>, 
     let initiallen = out.metadata().unwrap().len();
     if initiallen > 0 {
       let mut rot : IOResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>>  = if args.flag_outpass.len() > 0 {
-         FileStripleIterator::init(out, copy_builder_any, &initAnyCypherWithPass, args.flag_outpass.clone())
+         FileStripleIterator::init(out, copy_builder_any, &init_any_cypher_with_pass, args.flag_outpass.clone())
       } else {
-         FileStripleIterator::init(out, copy_builder_any, &initAnyCypherStdIn, ())
+         FileStripleIterator::init(out, copy_builder_any, &init_any_cipher_stdin, ())
       };
       let mut ot = rot.unwrap();
       let splitpos = if args.flag_ox > 0 {
@@ -451,12 +470,13 @@ fn copy_vec_oriter (args : &Args, contents : Vec<(AnyStriple,Option<Vec<u8>>)>, 
           }
         },
       };
-      out.write(&ciph.get_cypher_header()).unwrap();
-      for mos in contents.iter() {
+      write_striple_file(&ciph, &mut contents.into_iter(), &mut out).unwrap()
+      //out.write(&ciph.get_cypher_header()).unwrap();
+     /* for mos in contents.iter() {
         write_striple(&ciph,&mos.0,mos.1.as_ref().map(|pk|&pk[..]),&mut out).unwrap();
           // copy (byte directly for unknow kind)
  //         let mos = it.get_asbyte(*ix).unwrap();
  //         out.write(&mos[..]);
-      }
+      }*/
     };
 }

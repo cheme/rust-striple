@@ -11,7 +11,7 @@ use striple::anystriple::{AnyStriple, copy_builder_any};
 //use striple::striple::copy_as_kind;
 use striple::striple::StripleIf;
 use striple::striple::OwnedStripleIf;
-use striple::storage::{write_striple_file_ref,NoCypher,RemoveKey,initAnyCypherStdIn};
+use striple::storage::{write_striple_file_ref,NoCypher,RemoveKey,init_any_cipher_stdin};
 #[cfg(feature="opensslpbkdf2")]
 use striple::storage::Pbkdf2;
 
@@ -19,7 +19,7 @@ use striple::storage::Pbkdf2;
 /// Plus write base file without password or with encrypted password.
 fn main() {
   let mut datafile = File::open("./baseperm.data").unwrap();
-  let mut rit : IOResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>> = FileStripleIterator::init(datafile, copy_builder_any, &initAnyCypherStdIn, ()); 
+  let mut rit : IOResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>> = FileStripleIterator::init(datafile, copy_builder_any, &init_any_cipher_stdin, ()); 
   let striples : Vec<(AnyStriple,Option<Vec<u8>>)> = rit.unwrap().collect();
 
   // Doing some check based upon knowned structure
