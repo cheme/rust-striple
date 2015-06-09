@@ -6,11 +6,20 @@
 //! Several feature implements validation scheme (signature, verification and key derivation).
 //! Others add optional traits implementation such as serialize.
 //!
-
+/*
+#![feature(no_std)]
+#![no_std]
+*/
 #![feature(collections)]
 #![feature(core)]
 
 #![feature(debug_builders)]
+/*
+#[cfg(not(for_c))]
+#[macro_use] extern crate std;
+/* for_c config : fake std reexport from core TODO
+ **/
+*/
 
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;

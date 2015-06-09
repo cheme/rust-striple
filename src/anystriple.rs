@@ -4,7 +4,7 @@
 //! overriden in applications.
 //!
 
-use striple::{Striple,StripleRef,NoKind,Error,ref_as_kind,StripleKind,AsStriple,StripleIf,OwnedStripleIf, PubStriple,PublicScheme,ErrorKind};
+use striple::{AsStripleIf,Striple,StripleRef,NoKind,Error,ref_as_kind,StripleKind,AsStriple,StripleIf,OwnedStripleIf, PubStriple,PublicScheme,ErrorKind};
 #[cfg(feature="opensslrsa")]
 use rsa_openssl::Rsa2048Sha512;
 #[cfg(feature="cryptoecdsa")]
@@ -48,100 +48,15 @@ macro_rules! derive_any_striple(($en:ident{ $($st:ident($ty:ty),)* }) => (
 pub enum $en {
   $( $st($ty), )*
 }
-impl StripleIf for $en {
+impl AsStripleIf for $en {
+
   #[inline]
-  fn get_algo_key(&self) -> &'static [u8]{
+  fn as_striple_if(&self) -> &StripleIf {
     match self {
-      $( & $en::$st(ref i) => i.get_algo_key(), )*
-    }
-  }
-  #[inline]
-  fn check_content(&self, cont : &[u8],sig : &[u8]) -> bool {
-    match self {
-      $( & $en::$st(ref i) => i.check_content(cont, sig), )*
-    }
-  }
-  #[inline]
-  fn sign_content(&self, pri : &[u8], con : &[u8]) -> Vec<u8> {
-    match self {
-      $( & $en::$st(ref i) => i.sign_content(pri, con), )*
-    }
-  }
-  #[inline]
-  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> bool {
-    match self {
-      $( & $en::$st(ref i) => i.check_id_derivation(sig,id), )*
-    }
-  }
-  #[inline]
-  fn derive_id(&self, sig : &[u8]) -> Vec<u8> {
-    match self {
-      $( & $en::$st(ref i) => i.derive_id(sig), )*
-    }
-  }
-  #[inline]
-  fn striple_ser (&self) -> Vec<u8> {
-    match self {
-      $( & $en::$st(ref i) => i.striple_ser(), )*
-    }
-  }
-  #[inline]
-  fn get_key(&self) -> &[u8] {
-    match self {
-      $( & $en::$st(ref i) => i.get_key(), )*
-    }
-  }
-  #[inline]
-  fn get_sig(&self) -> &[u8] {
-    match self {
-      $( & $en::$st(ref i) => i.get_sig(), )*
-    }
-  }
-  #[inline]
-  fn get_id(&self) -> &[u8] {
-    match self {
-      $( & $en::$st(ref i) => i.get_id(), )*
-    }
-  }
-  #[inline]
-  fn get_about(&self) -> &[u8] {
-    match self {
-      $( & $en::$st(ref i) => i.get_about(), )*
-    }
-  }
-  #[inline]
-  fn get_from(&self) -> &[u8] {
-    match self {
-      $( & $en::$st(ref i) => i.get_from(), )*
-    }
-  }
-  #[inline]
-  fn get_content(&self) -> &[u8] {
-    match self {
-      $( & $en::$st(ref i) => i.get_content(), )*
-    }
-  }
-  #[inline]
-  fn get_enc(&self) -> &[u8] {
-    match self {
-      $( & $en::$st(ref i) => i.get_enc(), )*
-    }
-  }
-  #[inline]
-  fn get_content_ids(&self) -> Vec<&[u8]> {
-    match self {
-      $( & $en::$st(ref i) => i.get_content_ids(), )*
-    }
-  }
-  #[inline]
-  fn get_tosig(&self) -> Vec<u8> {
-    match self {
-      $( & $en::$st(ref i) => i.get_tosig(), )*
+      $( & $en::$st(ref i) => i, )*
     }
   }
 }
-
-
 
 ));
 
@@ -215,22 +130,20 @@ impl AnyStriple {
 
   }
 
- 
-pub fn is_public(&self) -> bool {
-  match self {
-    &AnyStriple::StriplePSha512(_) => {
-      true
-    },
-    &AnyStriple::StriplePSha256(_) => {
-      true
-    },
-    &AnyStriple::StriplePRIP(_) => {
-      true
-    },
-    _ => {
-      false
+  pub fn is_public(&self) -> bool {
+    match self {
+      &AnyStriple::StriplePSha512(_) => {
+        true
+      },
+      &AnyStriple::StriplePSha256(_) => {
+        true
+      },
+      &AnyStriple::StriplePRIP(_) => {
+        true
+      },
+      _ => {
+        false
+      }
     }
   }
-
-}
 }

@@ -4,6 +4,11 @@ name = "striple"
 version = "0.0.1"
 authors = ["Emeric Chevalier <emericchevalier.pro@gmail.com>"]
 
+
+[lib]
+name = "striple"
+crate-type = ["rlib", "dylib"]
+
 [features]
 #default = ["public_crypto","public_openssl","cryptoecdsa","opensslrsa","opensslpbkdf2"]
 default = ["public_crypto","serialize","public_openssl","cryptoecdsa","opensslrsa","opensslpbkdf2"]

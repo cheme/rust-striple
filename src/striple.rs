@@ -21,33 +21,31 @@ use rustc_serialize::base64::ToBase64;
 #[cfg(feature="serialize")]
 use rustc_serialize::base64;
 
-// TODO replace vec new push all [u8] by something better for convert &[u8] to Vec<u8> -> simply
-// to_vec() ????
-
+ 
 /// Striple could be a standard struct, or references to contents from others struct
 /// Trait should not be implemented for other struct (or conformance with test case needed).
 /// Other struct should implement AsStriple (probably to stripleRef).
 /// TODO word on enum to serialize and manage parametric types
-pub trait StripleIf : Clone + Debug {
+pub trait StripleIf : Debug {
 
   fn check_content(&self, cont : &[u8],sig : &[u8]) -> bool;
   fn sign_content(&self, _ : &[u8], _ : &[u8]) -> Vec<u8>;
   fn derive_id(&self, sig : &[u8]) -> Vec<u8>;
   fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> bool;
   /// check striple integrity (signature and key)
-  fn check<FS : StripleIf> (&self, from : &FS) -> bool {
+  fn check (&self, from : &StripleIf) -> bool {
     self.check_id(from) && self.check_sig(from)
   }
 
 
   /// check signature of striple
-  fn check_sig< FS : StripleIf> (&self, from : &FS) -> bool {
+  fn check_sig (&self, from : &StripleIf) -> bool {
     from.get_id() == self.get_from() && from.check_content(&self.get_tosig(), self.get_sig())
   }
 
 
   /// check key of striple
-  fn check_id<FS : StripleIf> (&self, from : &FS) -> bool {
+  fn check_id (&self, from : &StripleIf) -> bool {
     from.check_id_derivation(self.get_sig(), self.get_id())
   }
 
@@ -792,6 +790,76 @@ pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (byte
   }
 }
  
+/// conversion to stripleif object trait
+/// It is an adapter for cleaner polymorphism
+/// (see AnyStriple impl).
+pub trait AsStripleIf {
+  fn as_striple_if(&self) -> &StripleIf;
+}
+// boilerplate adapter code
+impl<T : AsStripleIf + Debug> StripleIf for T {
+  #[inline]
+  fn check_content(&self, cont : &[u8],sig : &[u8]) -> bool {
+    self.as_striple_if().check_content(cont,sig)
+  }
+  #[inline]
+  fn sign_content(&self, a : &[u8], b : &[u8]) -> Vec<u8> {
+    self.as_striple_if().sign_content(a,b)
+  }
+  #[inline]
+  fn derive_id(&self, sig : &[u8]) -> Vec<u8> {
+    self.as_striple_if().derive_id(sig)
+  }
+  #[inline]
+  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> bool {
+    self.as_striple_if().check_id_derivation(sig,id)
+  }
+  #[inline]
+  fn get_enc(&self) -> &[u8] {
+    self.as_striple_if().get_enc()
+  }
+  #[inline]
+  fn get_id(&self) -> &[u8] {
+    self.as_striple_if().get_id()
+  }
+  #[inline]
+  fn get_from(&self) -> &[u8] {
+    self.as_striple_if().get_from()
+  }
+  #[inline]
+  fn get_about(&self) -> &[u8] {
+    self.as_striple_if().get_about()
+  }
+  #[inline]
+  fn get_content(&self) -> &[u8] {
+    self.as_striple_if().get_content()
+  }
+  #[inline]
+  fn get_content_ids(&self) -> Vec<&[u8]> {
+    self.as_striple_if().get_content_ids()
+  }
+  #[inline]
+  fn get_key(&self) -> &[u8] {
+    self.as_striple_if().get_key()
+  }
+  #[inline]
+  fn get_algo_key(&self) -> &'static [u8] {
+    self.as_striple_if().get_algo_key()
+  }
+  #[inline]
+  fn get_sig(&self) -> &[u8] {
+    self.as_striple_if().get_sig()
+  }
+  #[inline]
+  fn get_tosig(&self) -> Vec<u8> {
+    self.as_striple_if().get_tosig()
+  }
+  #[inline]
+  fn striple_ser (&self) -> Vec<u8> {
+    self.as_striple_if().striple_ser()
+  }
+
+}
 
 /// Trait for structure that could be use as an striple.
 /// A structure can contain multiple striple, that is why the trait is parametric.

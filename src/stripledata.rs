@@ -5,6 +5,9 @@
 //! TODO multiple IDs
 //! TODO loading full striple seems useless at this point : remove structs
 //!
+//! TODO change get_algo definition to include an index allowing more generic definition of id
+//! loading and therefore additional anytype scheme in external libraries!!!
+//!
 
 use striple::Striple;
 use striple::{StripleKind,NoKind};
