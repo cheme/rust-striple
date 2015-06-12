@@ -10,6 +10,7 @@ use striple::StripleKind;
 use self::openssl::crypto::hash::{Hasher,Type};
 use self::openssl::crypto::pkey::{PKey};
 use std::io::Write;
+use std::io::Read;
 use stripledata;
 
 #[cfg(test)]
@@ -23,6 +24,7 @@ use striple::test::{test_striple_kind,chaining_test};
 
 static RSA_SIZE : usize = 2048;
 static HASH_SIGN : Type = Type::SHA512;
+static HASH_BYTE_SIZE : usize = 512 / 8;
 
 /// Key derivation using SHA-512
 pub struct SHA512KD;
@@ -32,7 +34,6 @@ impl IDDerivation for SHA512KD {
   /// id
   #[inline]
   fn derive_id(sig : &[u8]) -> Vec<u8> {
-    // TODO len to 512 when test ok
     if sig.len() < 1 {
       Vec::new()
     } else {
@@ -50,23 +51,54 @@ pub struct Rsa2048;
 /// generic public signature scheme
 impl SignatureScheme for Rsa2048 {
   /// hash of content and from key (pri)
-  fn sign_content(pri : &[u8], cont : &[u8]) -> Vec<u8> {
+  fn sign_content(pri : &[u8], cont : &mut Read) -> Vec<u8> {
     let mut pkey = PKey::new();
     pkey.load_priv(pri);
     let mut digest = Hasher::new(HASH_SIGN);
-    digest.write_all(cont).unwrap();
+    let mut vbuff = vec!(0;HASH_BYTE_SIZE);
+    let buff = &mut vbuff[..];
+
+    loop {
+      let end = cont.read(buff).unwrap();
+      if end == 0 {
+         break
+      };
+      if end != HASH_BYTE_SIZE {
+       digest.write(&buff[0 .. end]).unwrap();
+      } else {
+        digest.write(buff).unwrap();
+      };
+    };
+
+    //digest.write_all(cont).unwrap();
     let tosig = digest.finish();
-    println!("TOSIG {:?} : {:?}",tosig.len(),tosig);
+    //println!("TOSIG {:?} : {:?}",tosig.len(),tosig);
     pkey.sign_with_hash(&tosig, HASH_SIGN)
   }
 
   /// first parameter is public key, second is content and third is signature
-  fn check_content(publ : &[u8], cont : &[u8], sign : &[u8]) -> bool {
+  fn check_content(publ : &[u8], cont : &mut Read, sign : &[u8]) -> bool {
     let mut pkey = PKey::new();
     pkey.load_pub(publ);
 
     let mut digest = Hasher::new(HASH_SIGN);
-    digest.write_all(cont).unwrap();
+    let mut vbuff = vec!(0;HASH_BYTE_SIZE);
+    let buff = &mut vbuff[..];
+
+    loop {
+      let end = cont.read(buff).unwrap();
+      if end == 0 {
+          break
+      };
+      if end != HASH_BYTE_SIZE {
+       digest.write(&buff[0 .. end]).unwrap();
+      } else {
+        digest.write(buff).unwrap();
+      };
+    };
+
+
+//    digest.write_all(cont).unwrap();
     pkey.verify_with_hash(&digest.finish(), sign, HASH_SIGN)
   }
 

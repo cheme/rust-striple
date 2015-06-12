@@ -8,10 +8,11 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use striple::SignatureScheme;
 use striple::PublicScheme;
+use std::io::Read;
 
 /// Technical trait
 pub trait CHash : Debug + Clone {
-  fn hash (from : &[u8], content : &[u8]) -> Vec<u8>;
+  fn hash (from : &[u8], content : &mut Read) -> Vec<u8>;
   fn len () -> usize;
 }
 
@@ -21,12 +22,12 @@ pub struct PubSign<H : CHash>(PhantomData<H>);
 /// generic public signature scheme
 impl<H : CHash> SignatureScheme for PubSign<H> {
   /// hash of content and from key (pri)
-  fn sign_content(pri : &[u8], cont : &[u8]) -> Vec<u8> {
+  fn sign_content(pri : &[u8], cont : &mut Read) -> Vec<u8> {
     H::hash(pri, cont)
   }
 
   /// first parameter is public key, second is content and third is signature
-  fn check_content(publ : &[u8],cont : &[u8],sig : &[u8]) -> bool {
+  fn check_content(publ : &[u8], cont : &mut Read, sig : &[u8]) -> bool {
     Self::sign_content(publ, cont) == sig
   }
 
@@ -51,6 +52,8 @@ pub mod public_crypto {
   use self::crypto::digest::Digest;
   use self::crypto::ripemd160::Ripemd160;
   use super::{PubSign,CHash};
+  use std::io::Read;
+  use std::io::Cursor;
 
   #[cfg(test)]
   use striple::test::{test_striple_kind,chaining_test};
@@ -77,7 +80,7 @@ pub mod public_crypto {
 
   impl CHash for Ripemd {
 
-  fn hash(buff1 : &[u8], buff2 : &[u8]) -> Vec<u8> {
+  fn hash(buff1 : &[u8], buff2 : &mut Read) -> Vec<u8> {
     let digest = Ripemd160::new();
     hash_crypto(buff1, buff2, digest)
   }
@@ -87,39 +90,26 @@ pub mod public_crypto {
   }
   }
 
-  fn hash_crypto<H : Digest>(buff1 : &[u8], buff2 : &[u8], mut digest : H) -> Vec<u8> {
-    let bsize = digest.block_size();
-    let bbytes = (bsize+7)/8;
+  fn hash_crypto<H : Digest>(buff1 : &[u8], buff2 : &mut Read, mut digest : H) -> Vec<u8> {
+    let mut r = Cursor::new(buff1).chain(buff2);
+
+    let bbytes = digest.block_size();
+//    let bbytes = (bsize+7)/8;
     let ressize = digest.output_bits();
     let outbytes = (ressize+7)/8;
-    debug!("{:?}:{:?}", bsize,ressize);
-    let mut tmpvec = Vec::new();
-    let nbiter1 = (buff1.len() -1) / bbytes;
-    for i in (0 .. nbiter1) {
-      let end = (i+1) * bbytes;
-      if end < buff1.len() {
-        digest.input(&buff1[i * bbytes .. end]);
-      } else {
-        digest.input(&buff1[i * bbytes ..]);
+    debug!("{:?}:{:?}", bbytes,ressize);
+ 
+    let mut vbuf = vec!(0;bbytes);
+    let buff = &mut vbuf[..];
+    loop {
+      let end = r.read(buff).unwrap();
+      if end == 0 {
+        break
       };
-    };
-    tmpvec.push_all(&buff1[(nbiter1) * bbytes..]);
-    let adj = bbytes - tmpvec.len();
-    tmpvec.push_all(&buff2[0 .. adj]);
-    digest.input(&tmpvec);
-
-    let bufff2 = &buff2[adj..];
-    let nbiter2 = if bufff2.len() == 0 {
-      0
-    }else {
-      (bufff2.len() - 1) / bbytes
-    };
-    for i in (0 .. nbiter2 + 1) {
-      let end = (i+1) * bbytes;
-      if end < bufff2.len() {
-        digest.input(&bufff2[i * bbytes .. end]);
+      if end != bbytes {
+       digest.input(&buff[0 .. end]);
       } else {
-        digest.input(&bufff2[i * bbytes ..]);
+        digest.input(buff);
       };
     };
 
@@ -147,18 +137,34 @@ pub mod public_openssl {
   extern crate openssl;
   use self::openssl::crypto::hash::{Hasher,Type};
   use std::io::Write;
+  use std::io::Read;
+  use std::io::Cursor;
   #[cfg(test)]
   use striple::test::{test_striple_kind,chaining_test};
   use stripledata;
   use striple::{StripleKind,IdentityKD};
   use super::{PubSign,CHash};
 
-
-
-fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
+ 
+fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : Type) -> Vec<u8> {
+  //println!("{:?}",buff1);
+  let mut r = Cursor::new(buff1).chain(buff2);
   let mut digest = Hasher::new(typ);
-  digest.write_all(buf1).unwrap();
-  digest.write_all(buf2).unwrap();
+  let bbytes = typ.md_len();
+  //println!("bufflen {:?}", bbytes);
+  let mut vbuff = vec!(0;bbytes);
+  let buff = &mut vbuff[..];
+  loop {
+    let end = r.read(buff).unwrap();
+    if end == 0 {
+      break
+    };
+    if end != bbytes {
+     digest.write(&buff[0 .. end]).unwrap();
+    } else {
+      digest.write(buff).unwrap();
+    };
+  };
   digest.finish()
 }
 
@@ -222,7 +228,7 @@ fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
 
 
   impl CHash for Ripemd {
-    fn hash(buff1 : &[u8], buff2 : &[u8]) -> Vec<u8> {
+    fn hash(buff1 : &[u8], buff2 : &mut Read) -> Vec<u8> {
       hash_openssl(buff1, buff2, Type::RIPEMD160)
     }
     fn len() -> usize {
@@ -230,7 +236,7 @@ fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
     }
   }
   impl CHash for Sha512 {
-    fn hash(buff1 : &[u8], buff2 : &[u8]) -> Vec<u8> {
+    fn hash(buff1 : &[u8], buff2 : &mut Read) -> Vec<u8> {
       hash_openssl(buff1, buff2, Type::SHA512)
     }
     fn len() -> usize {
@@ -238,7 +244,7 @@ fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
     }
   }
   impl CHash for Sha256 {
-    fn hash(buff1 : &[u8], buff2 : &[u8]) -> Vec<u8> {
+    fn hash(buff1 : &[u8], buff2 : &mut Read) -> Vec<u8> {
       hash_openssl(buff1, buff2, Type::SHA256)
     }
     fn len() -> usize {
@@ -247,17 +253,17 @@ fn hash_openssl(buf1 : &[u8], buf2 : &[u8], typ : Type) -> Vec<u8> {
   }
 
   #[test]
-  fn test_pub_ripemdkind(){
+  fn test_pub_ripemdkind() {
     test_striple_kind::<PubRipemd> (20, true);
   }
 
   #[test]
-  fn test_pub_sha512kind(){
+  fn test_pub_sha512kind() {
     test_striple_kind::<PubSha512> (64, true);
   }
 
   #[test]
-  fn test_pub_sha256kind(){
+  fn test_pub_sha256kind() {
     test_striple_kind::<PubSha256> (32, true);
   }
 

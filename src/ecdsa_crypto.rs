@@ -14,6 +14,8 @@ use stripledata;
 use self::rand::Rng;
 use self::rand::thread_rng;
 use self::rand::os::OsRng;
+use std::io::Read;
+use std::io::Cursor;
 
 #[cfg(test)]
 #[cfg(feature="public_crypto")]
@@ -35,7 +37,7 @@ impl IDDerivation for RIPEMD160KD {
       Vec::new()
     } else {
       let mut digest = Ripemd160::new();
-      hash_buf_crypto(sig, &mut digest)
+      hash_buf_crypto(&mut Cursor::new(sig), &mut digest)
     }
   }
 }
@@ -47,7 +49,7 @@ pub struct Ecdsa;
 /// generic public signature scheme
 impl SignatureScheme for Ecdsa {
   /// hash of content and from key (pri)
-  fn sign_content(pri : &[u8], cont : &[u8]) -> Vec<u8> {
+  fn sign_content(pri : &[u8], cont : &mut Read) -> Vec<u8> {
     let mut digest = Ripemd160::new();
     let chash = hash_buf_crypto(cont, &mut digest);
  
@@ -56,7 +58,7 @@ impl SignatureScheme for Ecdsa {
   }
 
   /// first parameter is public key, second is content and third is signature
-  fn check_content(publ : &[u8], cont : &[u8], sign : &[u8]) -> bool {
+  fn check_content(publ : &[u8], cont : &mut Read, sign : &[u8]) -> bool {
     if sign.len() != 64 {
       false
     } else {
@@ -126,24 +128,25 @@ fn test_chaining_multi() {
 
 
 
-fn hash_buf_crypto(buff : &[u8], digest : &mut Digest) -> Vec<u8> {
+fn hash_buf_crypto(r : &mut Read, digest : &mut Digest) -> Vec<u8> {
   let bsize = digest.block_size();
   let bbytes = (bsize+7)/8;
   let ressize = digest.output_bits();
   let outbytes = (ressize+7)/8;
   debug!("{:?}:{:?}", bsize,ressize);
 
-  let nbiter = if buff.len() == 0 {
-      0
-  }else {
-    (buff.len() - 1) / bbytes
-  };
-  for i in (0 .. nbiter + 1) {
-    let end = (i+1) * bbytes;
-    if end < buff.len() {
-      digest.input(&buff[i * bbytes .. end]);
+  let mut vbuff = vec![0;bbytes];
+  let buff = &mut vbuff[..];
+
+  loop {
+    let end = r.read(buff).unwrap();
+    if end == 0 {
+          break
+    };
+    if end != bbytes {
+     digest.input(&buff[0 .. end]);
     } else {
-      digest.input(&buff[i * bbytes ..]);
+      digest.input(buff);
     };
   };
 

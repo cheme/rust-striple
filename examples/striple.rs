@@ -13,6 +13,7 @@
 //!  
 
 
+#![feature(collections)] // only use for a push_all : TODO remove when better extend
 #![feature(plugin)]
 #![plugin(docopt_macros)]
 extern crate docopt;
@@ -29,13 +30,14 @@ use rustc_serialize::base64::ToBase64;
 use rustc_serialize::base64::FromBase64;
 use std::fs::{File,OpenOptions};
 use std::fs;
+use std::path;
 use std::io::{Read,Write,Seek,SeekFrom};
 use striple::anystriple::{AnyStriple, copy_builder_any};
-use striple::striple::{NoKind,StripleDisp, StripleIf,Striple, StripleRef};
+use striple::striple::{BCont,NoKind,StripleDisp, StripleIf,Striple, StripleRef};
 #[cfg(feature="serialize")]
 use striple::striple::BASE64CONF;
 use striple::striple::Error as StripleError;
-use striple::storage::{FileStripleIterator,StorageCypher,write_striple,Pbkdf2,AnyCyphers};
+use striple::storage::{FileMode,FileStripleIterator,StorageCypher,write_striple,Pbkdf2,AnyCyphers};
 use std::io::Result as IOResult;
 use std::result::Result as StdResult;
 use std::io::{stdin,BufRead};
@@ -43,18 +45,16 @@ use num::traits::ToPrimitive;
 use striple::storage::{write_striple_file,write_striple_file_ref,NoCypher,RemoveKey,init_any_cipher_stdin,init_any_cypher_with_pass,init_noread_key};
 
 
-
-
 #[cfg(feature="serialize")]
 docopt!(Args derive Debug, "
 Usage: 
 striple disp (-i <file> | - ) [--inpass <inpass>]  [-x <ix>]...
 striple id64 [from | about | content | kind | enc] (-i <file> | - ) [--inpass <inpass>] [-x <ix>]...
-striple cp (-i <file> | - ) [--inpass <inpass>] [-x <ix>]... (-o <file>) [--outpass <outpass>] [--ox <outix>]
+striple cp (-i <file> | - ) [--inpass <inpass>] [-x <ix>]... (-o <file>) [--outpass <outpass>] [--ox <outix>] [--relative | --absolute | --nofile] [--conttreshold <conttreshold>]
 striple rm -i <file> [--inpass <inpass>] [-x <ix>]...
-striple rewrite  (-i <file> | - ) [--inpass <inpass>] [-o <file>] [-c <cipher>] [--outpass <outpass>]
+striple rewrite  (-i <file> | - ) [--inpass <inpass>] [-o <file>] [-c <cipher>] [--outpass <outpass>] [--relative | --absolute | --nofile] [--conttreshold <conttreshold>]
 striple check (-i <file> | - ) (-x <ix>) [--inpass <inpass>] [--fromfile <fromfile>] [-x <ix>]...
-striple create [--encfile <encfile> -x <ix> | --encid <encid>] (--kindfile <kindfile> -x <ix> | --kindid <kindid>) [--fromfile <fromfile> -x <ix> [--frompass <frompass>]] [--aboutfile <aboutfile> -x <ix> | --aboutid <aboutid>] (--contentfile <contentfile> | --content <content> | (--contentid <contentid>)... | - ) [-o <file>] [-c <cipher>] [--outpass <outpass>] [--ox <outix>]
+striple create [--encfile <encfile> -x <ix> | --encid <encid>] (--kindfile <kindfile> -x <ix> | --kindid <kindid>) [--fromfile <fromfile> -x <ix> [--frompass <frompass>]] [--aboutfile <aboutfile> -x <ix> | --aboutid <aboutid>] (--contentfile <contentfile> | --content <content> | (--contentid <contentid>)... | - ) [-o <file>] [-c <cipher>] [--outpass <outpass>] [--ox <outix>] [--relative | --absolute | --nofile] [--conttreshold <conttreshold>]
 
 striple -h
 striple -V
@@ -65,13 +65,17 @@ Options:
 -x --ix <ix>  Indexes to use. Depending on usecase it is for first file or for matching index files. Index in command start at 1.
 --inpass <inpass>  Input passphrase. For multiple pass they match multiple input file indexes stdin being last index
 -o --out <file>
---ox <ix>  Indexes to use for output when output in an existing file.[default: 0]
+--ox <outix>  Indexes to use for output when output in an existing file.[default: 0]
+--relative  File and big content could be written in a relative way
+--absolute  File and big content could be written in an absolute way
+--conttreshold <conttreshold>   In big content may be written to file if bigger than this treshold and file mode allows it [default: 0]
+--nofile  Attached file are forced into the storage
 --outpass <outpass>  Output passphrase.
 -c --cipher <cipher>   Cipher to use for output (PBKDF2, NoCipher, RemoveKey...) [default: PBKDF2]
 --content <content>  Content as simple string, for byte content use stdin
 --contentid <contentid>  Base64 encoded contentid
 -V --version
-", flag_ix : Vec<usize>, flag_ox : usize);
+", flag_ix : Vec<usize>, flag_ox : usize, flag_conttreshold : usize);
 
 fn main() {
 
@@ -186,13 +190,14 @@ fn run() {
    (_,_,_,_,true,_) => {
      //rewrite
     let mut out = File::create(&args.flag_out).unwrap();
+    let fm = parse_cmd_filemode(&args);
     match &args.flag_cipher {
       i if (i == "PBKDF2") => {
         let pbk = initpkbdf2(args.flag_outpass.clone());
-        write_striple_file(&pbk, &mut it, &mut out).unwrap()
+        write_striple_file(&pbk, &mut it, &fm, &mut out).unwrap()
       },
-      i if (i == "NoCipher") => write_striple_file(&NoCypher, &mut it, &mut out).unwrap(),
-      i if (i == "RemoveKey") => write_striple_file(&RemoveKey, &mut it, &mut out).unwrap(),
+      i if (i == "NoCipher") => write_striple_file(&NoCypher, &mut it, &fm,  &mut out).unwrap(),
+      i if (i == "RemoveKey") => write_striple_file(&RemoveKey, &mut it, &fm, &mut out).unwrap(),
       _ => {println!("Unknown cipher");},
     }
   },
@@ -272,12 +277,27 @@ fn run() {
    let contentids = args.flag_contentid.iter().map(|c|c.from_base64().unwrap()).collect();
 
    let content = if args.flag_contentfile {
-     let mut contentfile = File::open(&args.arg_contentfile).unwrap();
-     let mut res = Vec::new();
-     contentfile.read_to_end(&mut res);
-     res
+     // TODO add option to get BCont file instead of load
+     if args.flag_relative || args.flag_absolute {
+       let fileexists = fs::metadata(&args.arg_contentfile).map(|f|f.is_file()).unwrap_or(false);
+       if fileexists {
+         Some(BCont::LocalPath(path::PathBuf::from(&args.arg_contentfile)))
+       } else {
+         panic!("Invalid content file for striple creation")
+       }
+     } else {
+
+       let mut contentfile = File::open(&args.arg_contentfile).unwrap();
+       let mut res = Vec::new();
+       contentfile.read_to_end(&mut res);
+       Some(BCont::OwnedBytes(res))
+     }
    } else {
-    args.flag_content.from_base64().unwrap()
+     if args.flag_content.len() > 0 {
+       Some(BCont::OwnedBytes(args.flag_content.from_base64().unwrap()))
+     } else {
+       None
+     }
    };
    let ofrom = if args.flag_fromfile {
      let mut fromfile = File::open(&args.arg_fromfile).unwrap();
@@ -315,13 +335,21 @@ fn run() {
       content,
    ).unwrap();
    if args.flag_out.len() > 0 {
-   let mut contents = Vec::new();
-   contents.push((ownedStriple.0,Some(ownedStriple.1)));
-   copy_vec_oriter(&args, contents, None);
+     let mut contents = Vec::new();
+     contents.push((ownedStriple.0,Some(ownedStriple.1)));
+     copy_vec_oriter(&args, contents, None);
    } else {
      // out on stdout as base64 : key then striple
      println!("{}", ownedStriple.1.to_base64(BASE64CONF));
-     print!("{}", ownedStriple.0.striple_ser().to_base64(BASE64CONF));
+     let mut sser = ownedStriple.0.striple_ser();
+     match &sser.1 {
+       &Some(ref bcon)=> {
+         // TODO buff the out (just complete to be multiple of (see base64 padding)
+         sser.0.push_all(&bcon.get_byte().unwrap()[..]);
+       },
+       &None => (),
+     };
+     print!("{}", sser.0.to_base64(BASE64CONF));
      
    }
   }
@@ -356,7 +384,6 @@ fn buff_copy<R : Read, W : Write> (from : &mut R, to : &mut W, size : usize) -> 
   try!(from.read(lastbuff));
   try!(to.write(lastbuff));
   Ok(())
- 
 
 }
 
@@ -384,49 +411,67 @@ fn initpkbdf2 (_ : String) -> RemoveKey {
   RemoveKey
 }
 
-
+fn parse_cmd_filemode(arg : &Args) -> FileMode {
+  let ct = if arg.flag_conttreshold == 0 {
+    Some(arg.flag_conttreshold)
+  } else {
+    None
+  };
+  if arg.flag_relative {
+    return FileMode::Relative(None);
+  };
+  if arg.flag_absolute {
+    return FileMode::Absolute(None);
+  };
+  if arg.flag_nofile {
+    return FileMode::NoFile;
+  };
+  FileMode::Idem
+}
 #[cfg(feature="serialize")]
 fn copy_iter<B> (args : &Args, it :FileStripleIterator<NoKind, AnyStriple, File, AnyCyphers, B>)
 where B :  Fn(&[u8], StripleRef<NoKind>) -> StdResult<AnyStriple, StripleError>
-  {
-    let mut out = OpenOptions::new().read(true).write(true).append(true).truncate(false).create(true).open(&args.flag_out).unwrap();
-    fs::copy(&args.flag_out, args.flag_out.clone() + "_");
-    let initiallen = out.metadata().unwrap().len();
-    if initiallen > 0 {
-      let mut rot : IOResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>>  = if args.flag_outpass.len() > 0 {
-         FileStripleIterator::init(out, copy_builder_any, &init_any_cypher_with_pass, args.flag_outpass.clone())
-      } else {
-         FileStripleIterator::init(out, copy_builder_any, &init_any_cipher_stdin, ())
-      };
-      let mut ot = rot.unwrap();
-      let splitpos = if args.flag_ox > 0 {
-         ot.get_entryposlength(args.flag_ox - 1).unwrap().0
-      }else{0};
-
-        for mos in it {
-          write_striple(&ot.1,&mos.0,mos.1.as_ref().map(|pk|&pk[..]),&mut ot.0).unwrap();
-        };
-      if args.flag_ox > 0 {
-        let mut out = &mut File::create(args.flag_out.clone() + "__").unwrap();
-        let from = &mut ot.0;
-        let usplit = splitpos.to_usize().unwrap();
-        let finallen = from.metadata().unwrap().len();
-        from.seek(SeekFrom::Start(0));
-        buff_copy(from, out, usplit);
-        from.seek(SeekFrom::Start(initiallen));
-        buff_copy(from, out, (finallen - initiallen).to_usize().unwrap());
-        from.seek(SeekFrom::Start(splitpos));
-        buff_copy(from, out, (initiallen - splitpos).to_usize().unwrap());
-        fs::rename(args.flag_out.clone() + "__",args.flag_out.clone()).unwrap();
-      }; 
+{ 
+  let fm = parse_cmd_filemode(args);
+  let mut out = OpenOptions::new().read(true).write(true).append(true).truncate(false).create(true).open(&args.flag_out).unwrap();
+  fs::copy(&args.flag_out, args.flag_out.clone() + "_");
+  let initiallen = out.metadata().unwrap().len();
+  if initiallen > 0 {
+    let mut rot : IOResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>>  = if args.flag_outpass.len() > 0 {
+      FileStripleIterator::init(out, copy_builder_any, &init_any_cypher_with_pass, args.flag_outpass.clone())
     } else {
-      fs::copy(&args.flag_in, &args.flag_out);
+      FileStripleIterator::init(out, copy_builder_any, &init_any_cipher_stdin, ())
     };
+    let mut ot = rot.unwrap();
+    let splitpos = if args.flag_ox > 0 {
+      ot.get_entryposlength(args.flag_ox - 1).unwrap().0
+    }else{0};
+
+    for mos in it {
+      write_striple(&ot.1,&mos.0,mos.1.as_ref().map(|pk|&pk[..]), &fm, &mut ot.0).unwrap();
+    };
+    if args.flag_ox > 0 {
+      let mut out = &mut File::create(args.flag_out.clone() + "__").unwrap();
+      let from = &mut ot.0;
+      let usplit = splitpos.to_usize().unwrap();
+      let finallen = from.metadata().unwrap().len();
+      from.seek(SeekFrom::Start(0));
+      buff_copy(from, out, usplit);
+      from.seek(SeekFrom::Start(initiallen));
+      buff_copy(from, out, (finallen - initiallen).to_usize().unwrap());
+      from.seek(SeekFrom::Start(splitpos));
+      buff_copy(from, out, (initiallen - splitpos).to_usize().unwrap());
+      fs::rename(args.flag_out.clone() + "__",args.flag_out.clone()).unwrap();
+    }; 
+  } else {
+    fs::copy(&args.flag_in, &args.flag_out);
+  };
 }
 
 #[cfg(feature="serialize")]
 fn copy_vec_oriter (args : &Args, contents : Vec<(AnyStriple,Option<Vec<u8>>)>, it : Option<AnyCyphers>)
   {
+    let fm = parse_cmd_filemode(args);
     let mut out = OpenOptions::new().read(true).write(true).append(true).truncate(false).create(true).open(&args.flag_out).unwrap();
     fs::copy(&args.flag_out, args.flag_out.clone() + "_");
     let initiallen = out.metadata().unwrap().len();
@@ -442,7 +487,7 @@ fn copy_vec_oriter (args : &Args, contents : Vec<(AnyStriple,Option<Vec<u8>>)>, 
       }else{0};
 
       for mos in contents {
-        write_striple(&ot.1,&mos.0,mos.1.as_ref().map(|pk|&pk[..]),&mut ot.0).unwrap();
+        write_striple(&ot.1,&mos.0,mos.1.as_ref().map(|pk|&pk[..]),&fm,&mut ot.0).unwrap();
       };
       if args.flag_ox > 0 {
         let mut out = &mut File::create(args.flag_out.clone() + "__").unwrap();
@@ -470,7 +515,7 @@ fn copy_vec_oriter (args : &Args, contents : Vec<(AnyStriple,Option<Vec<u8>>)>, 
           }
         },
       };
-      write_striple_file(&ciph, &mut contents.into_iter(), &mut out).unwrap()
+      write_striple_file(&ciph, &mut contents.into_iter(), &fm, &mut out).unwrap()
       //out.write(&ciph.get_cypher_header()).unwrap();
      /* for mos in contents.iter() {
         write_striple(&ciph,&mos.0,mos.1.as_ref().map(|pk|&pk[..]),&mut out).unwrap();

@@ -5,13 +5,14 @@ extern crate openssl;
 use std::fs::File;
 use std::io::{stdin,BufRead};
 use std::io::Result as IOResult;
+use std::io::Cursor;
 use striple::storage::FileStripleIterator;
 use striple::striple::NoKind;
 use striple::anystriple::{AnyStriple, copy_builder_any};
 //use striple::striple::copy_as_kind;
 use striple::striple::StripleIf;
 use striple::striple::OwnedStripleIf;
-use striple::storage::{write_striple_file_ref,NoCypher,RemoveKey,init_any_cipher_stdin};
+use striple::storage::{FileMode,write_striple_file_ref,NoCypher,RemoveKey,init_any_cipher_stdin};
 #[cfg(feature="opensslpbkdf2")]
 use striple::storage::Pbkdf2;
 
@@ -30,7 +31,7 @@ fn main() {
     // try sign check to check privatekey encryption
     let cont = vec!(56,84,8,46,250,6,8,7);
 
-    let sign = ownedroot.sign_content(&ownedroot.private_key_ref(),&cont[..]);
+    let sign = ownedroot.sign_content(&ownedroot.private_key_ref(),&mut Cursor::new(&cont[..]));
 /*    let mut pkey = PKey::new();
     pkey.load_priv (&ownedroot.private_key()[..]);
     let mut pemfile = File::create("./pem.pem").unwrap();
@@ -39,7 +40,7 @@ fn main() {
     sigfile.write_all(&sign[..]);
  */   
     println!("SIGN{:?}:{:?}", sign.len(), sign);
-    assert!(ownedroot.check_content(&cont[..],&sign[..]));
+    assert!(ownedroot.check_content(&mut Cursor::new(&cont[..]),&sign[..]));
 
 
     assert!(striples[3].0.check(&ownedroot) == true);
@@ -60,7 +61,7 @@ fn main() {
   //  let refvec : Vec<(&AnyStriple,Option<&[u8]>)> = striples.iter().map(|i|(&i.0,i.1.as_ref().map(|o|&o[..]))).collect();
   let mut it = striples.iter().map(|i|(&i.0,i.1.as_ref().map(|o|&o[..])));
   // let wr = write_striple_file_ref(&RemoveKey, &mut refvec.iter(), &mut datafile);
-  let wr = write_striple_file_ref(&RemoveKey, &mut it, &mut datafile);
+  let wr = write_striple_file_ref(&RemoveKey, &mut it, &FileMode::NoFile, &mut datafile);
 
   writepkbdf2(&striples);
 
@@ -84,7 +85,7 @@ fn writepkbdf2(striples : &Vec<(AnyStriple,Option<Vec<u8>>)>) {
   // remove terminal \n
   pass.pop();
   let pbk = Pbkdf2::new(pass,2000,None);
-  let wr = write_striple_file_ref(&pbk, &mut it, &mut datafile);
+  let wr = write_striple_file_ref(&pbk, &mut it, &FileMode::NoFile, &mut datafile);
 
 }
 

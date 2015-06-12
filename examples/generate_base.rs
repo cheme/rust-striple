@@ -12,11 +12,12 @@ use striple::striple::{StripleIf,StripleDisp};
 use striple::striple::{OwnedStripleIf,UnsafeOwnedStripleDisp};
 use striple::striple::StripleKind;
 use striple::striple::NoKind;
+use striple::striple::BCont;
 use striple::striple::{xtendsize,xtendsizeread,read_id,push_id};
 use striple::stripledata;
 use striple::stripledata::{BaseStriples,KindStriples};
 use std::marker::PhantomData;
-use striple::storage::{write_striple,NoCypher,StorageCypher};
+use striple::storage::{FileMode,write_striple,NoCypher,StorageCypher};
 #[cfg(feature="public_crypto")]
 use striple::striple_kind::public::crypto::PubRipemd;
 #[cfg(feature="public_openssl")]
@@ -37,13 +38,13 @@ fn genselfpublic<K:StripleKind>(content : String, _ : PhantomData<K>) -> Striple
 {
    let typednone : Option<&Striple<K>> = None;
   // self public
-  let pubcat : ( Striple<K>, Vec<u8>) = Striple::new(
+  let pubcat : ( Striple<K>, Vec<u8>) = Striple::new (
     vec!(),
     typednone,
     None,
     vec!(),
-    content.as_bytes().to_vec(),
-    );
+    Some(BCont::OwnedBytes(content.as_bytes().to_vec())),
+  );
   pubcat.0
 }
 
@@ -266,7 +267,7 @@ fn gen_pri<K : StripleKind>(cat : Vec<u8>, kind : Vec<u8>) -> Option<(BaseStripl
     // no contentids
     vec!(),
     // Easilly identifiable content
-    "ROOT".as_bytes().to_vec(),
+    Some(BCont::OwnedBytes("ROOT".as_bytes().to_vec())),
     );
   let ownedCat : (Striple<K>, Vec<u8>) = Striple::new(
     vec!(),
@@ -274,7 +275,7 @@ fn gen_pri<K : StripleKind>(cat : Vec<u8>, kind : Vec<u8>) -> Option<(BaseStripl
     // generic category
     Some(cat),
     vec!(),
-    "Striple Lib Categories".as_bytes().to_vec(),
+    Some(BCont::OwnedBytes("Striple Lib Categories".as_bytes().to_vec())),
     );
   let ownedKind : (Striple<K>, Vec<u8>) = Striple::new(
     vec!(),
@@ -282,7 +283,7 @@ fn gen_pri<K : StripleKind>(cat : Vec<u8>, kind : Vec<u8>) -> Option<(BaseStripl
     // generic kind
     Some(kind),
     vec!(),
-    "Striple Lib Kind".as_bytes().to_vec(),
+    Some(BCont::OwnedBytes("Striple Lib Kind".as_bytes().to_vec())),
     );
   let base = BaseStriples {
     root : ownedRoot,
@@ -302,42 +303,42 @@ fn gen_kind<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel
     Some(&pri.root),
     Some(pri.libcat.0.get_about().to_vec()),
     vec!(),
-    catlabel.as_bytes().to_vec(),
+    Some(BCont::OwnedBytes(catlabel.as_bytes().to_vec())),
     );
  let pubripem : (Striple<K>, Vec<u8>) = Striple::new(
     vec!(),
     Some(&ownedVKind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
-    "Public Ripemd160 derivation".as_bytes().to_vec(),
+    Some(BCont::OwnedBytes("Public Ripemd160 derivation".as_bytes().to_vec())),
     );
  let pubsha512 : (Striple<K>, Vec<u8>) = Striple::new(
     vec!(),
     Some(&ownedVKind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
-    "Public Sha512 derivation".as_bytes().to_vec(),
+    Some(BCont::OwnedBytes("Public Sha512 derivation".as_bytes().to_vec())),
     );
  let pubsha256 : (Striple<K>, Vec<u8>) = Striple::new(
     vec!(),
     Some(&ownedVKind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
-    "Public Sha512 derivation".as_bytes().to_vec(),
+    Some(BCont::OwnedBytes("Public Sha256 derivation".as_bytes().to_vec())),
     );
  let rsa2048_sha512 : (Striple<K>, Vec<u8>) = Striple::new(
     vec!(),
     Some(&ownedVKind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
-    "RSA 2048 Sha512 derivation".as_bytes().to_vec(),
+    Some(BCont::OwnedBytes("RSA 2048 Sha512 derivation".as_bytes().to_vec())),
     );
  let ecdsaripemd160 : (Striple<K>, Vec<u8>) = Striple::new(
     vec!(),
     Some(&ownedVKind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
-    "ECDSA(ED25519) Ripemd160 derivation".as_bytes().to_vec(),
+    Some(BCont::OwnedBytes("ECDSA(ED25519) Ripemd160 derivation".as_bytes().to_vec())),
     );
    Some(KindStriples {
      kind : ownedVKind,
@@ -363,7 +364,7 @@ pub fn write_striple_with_enc
   let mut tmpvec : Vec<u8> = Vec::new();
   let mut buf = &mut Cursor::new(tmpvec);
 
-  try!(write_striple(cypher,striple,pkey,buf));
+  try!(write_striple(cypher,striple,pkey,&FileMode::NoFile,buf));
 
 
   try!(buf.seek(SeekFrom::Start(0)));
