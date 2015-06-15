@@ -138,7 +138,6 @@ fn main() {
   write_striple_with_enc(&cypher,&pribase.root.0,Some(&pribase.root.1),&mut datafile, &privateEnc).unwrap();
   write_striple_with_enc(&cypher,&pubcat,None,&mut datafile, &publicEnc).unwrap();
   write_striple_with_enc(&cypher,&pubkind,None,&mut datafile, &publicEnc).unwrap();
- 
   write_striple_with_enc(&cypher,&pribase.libcat.0,Some(&pribase.libcat.1),&mut datafile, &privateEnc).unwrap();
   write_striple_with_enc(&cypher,&pribase.libkind.0,Some(&pribase.libkind.1),&mut datafile, &privateEnc).unwrap();
   write_striple_with_enc(&cypher,&prikinds.kind.0,Some(&prikinds.kind.1),&mut datafile, &privateEnc).unwrap();

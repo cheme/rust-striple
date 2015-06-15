@@ -366,6 +366,7 @@ fn show_it(toshow : (AnyStriple,Option<Vec<u8>>), ix : usize) {
 
   }else {
     println!("-{}: {}", ix, StripleDisp(&toshow.0));
+//    println!("{:?}", toshow.0.get_id());
   }
   toshow.1.map(|pass| println!("Private key present"));
 
