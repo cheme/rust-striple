@@ -11,7 +11,7 @@ crate-type = ["rlib", "dylib"]
 
 [features]
 #default = ["public_crypto","public_openssl","cryptoecdsa","opensslrsa","opensslpbkdf2"]
-default = ["public_crypto","serialize","public_openssl","cryptoecdsa","opensslrsa","opensslpbkdf2"]
+default = ["public_crypto","serialize","public_openssl","cryptoecdsa","opensslrsa","opensslpbkdf2","for_c"]
 #default = []
 serialize = ["rustc-serialize"]
 opensslrsa = ["openssl"]
@@ -19,6 +19,7 @@ opensslpbkdf2 = ["openssl"]
 cryptoecdsa = ["rust-crypto"]
 public_crypto = ["uuid","rust-crypto"]
 public_openssl = ["uuid","openssl"]
+for_c = ["libc"]
 
 [[example]]
 name='genbasestriples'
@@ -31,9 +32,6 @@ path = "examples/load_base.rs"
 [[example]]
 name='striple'
 path = "examples/striple.rs"
-
-
-
 
 
 [dependencies]
@@ -56,6 +54,10 @@ optional = true
 
 [dependencies.uuid]
 version = "0.1.17"
+optional = true
+
+[dependencies.libc]
+version = "0.1.8"
 optional = true
 
 [dev-dependencies.docopt_macros]

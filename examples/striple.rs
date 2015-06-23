@@ -38,9 +38,9 @@ use striple::striple::{BCont,NoKind,StripleDisp, StripleIf,Striple, StripleRef};
 use striple::striple::BASE64CONF;
 use striple::striple::Error as StripleError;
 use striple::storage::{FileMode,FileStripleIterator,StorageCypher,write_striple,Pbkdf2,AnyCyphers};
-use std::io::Result as IOResult;
 use std::result::Result as StdResult;
 use std::io::{stdin,BufRead};
+use std::io::Result as IOResult;
 use num::traits::ToPrimitive;
 use striple::storage::{write_striple_file,write_striple_file_ref,NoCypher,RemoveKey,init_any_cipher_stdin,init_any_cypher_with_pass,init_noread_key};
 
@@ -101,7 +101,7 @@ fn run() {
     println!("Reading form piped input not implemented yet");
     return()
   };
-  let mut rit :  IOResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>>  = if args.flag_inpass.len() > 0 {
+  let mut rit :  Result<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_>  = if args.flag_inpass.len() > 0 {
     FileStripleIterator::init(readseek, copy_builder_any, &init_any_cypher_with_pass, args.flag_inpass.clone())
   } else {
     FileStripleIterator::init(readseek, copy_builder_any, &init_any_cipher_stdin, ())
@@ -119,7 +119,7 @@ fn run() {
      //disp
     if args.flag_ix.len() > 0 {
       for i in args.flag_ix.iter() {
-      let s : IOResult<(AnyStriple,Option<Vec<u8>>)> = it.get(i - 1);
+      let s : Result<(AnyStriple,Option<Vec<u8>>),_> = it.get(i - 1);
         show_it(s.unwrap(), *i);
       }
     } else {
@@ -131,7 +131,7 @@ fn run() {
    },
    (_,true,_,_,_,_) => {
      //id64
-    let s : IOResult<(AnyStriple,Option<Vec<u8>>)> = it.get(ix - 1);
+    let s : Result<(AnyStriple,Option<Vec<u8>>),_> = it.get(ix - 1);
      match (args.cmd_from, args.cmd_about, args.cmd_content,args.cmd_kind,args.cmd_enc) {
        (true,_,_,_,_) => print!("{}", s.unwrap().0.get_from().to_vec().to_base64(BASE64CONF)),
        (_,true,_,_,_) => print!("{}", s.unwrap().0.get_about().to_vec().to_base64(BASE64CONF)),
@@ -438,7 +438,7 @@ where B :  Fn(&[u8], StripleRef<NoKind>) -> StdResult<AnyStriple, StripleError>
   fs::copy(&args.flag_out, args.flag_out.clone() + "_");
   let initiallen = out.metadata().unwrap().len();
   if initiallen > 0 {
-    let mut rot : IOResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>>  = if args.flag_outpass.len() > 0 {
+    let mut rot : Result<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_>  = if args.flag_outpass.len() > 0 {
       FileStripleIterator::init(out, copy_builder_any, &init_any_cypher_with_pass, args.flag_outpass.clone())
     } else {
       FileStripleIterator::init(out, copy_builder_any, &init_any_cipher_stdin, ())
@@ -477,7 +477,7 @@ fn copy_vec_oriter (args : &Args, contents : Vec<(AnyStriple,Option<Vec<u8>>)>, 
     fs::copy(&args.flag_out, args.flag_out.clone() + "_");
     let initiallen = out.metadata().unwrap().len();
     if initiallen > 0 {
-      let mut rot : IOResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>>  = if args.flag_outpass.len() > 0 {
+      let mut rot : Result<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_>  = if args.flag_outpass.len() > 0 {
          FileStripleIterator::init(out, copy_builder_any, &init_any_cypher_with_pass, args.flag_outpass.clone())
       } else {
          FileStripleIterator::init(out, copy_builder_any, &init_any_cipher_stdin, ())

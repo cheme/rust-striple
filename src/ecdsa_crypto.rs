@@ -7,6 +7,7 @@ extern crate rand;
 use striple::SignatureScheme;
 use striple::IDDerivation;
 use striple::StripleKind;
+use striple::Error;
 use self::crypto::digest::Digest;
 use self::crypto::ripemd160::Ripemd160;
 use self::crypto::ed25519;
@@ -49,12 +50,12 @@ pub struct Ecdsa;
 /// generic public signature scheme
 impl SignatureScheme for Ecdsa {
   /// hash of content and from key (pri)
-  fn sign_content(pri : &[u8], cont : &mut Read) -> Vec<u8> {
+  fn sign_content(pri : &[u8], cont : &mut Read) -> Result<Vec<u8>,Error> {
     let mut digest = Ripemd160::new();
     let chash = hash_buf_crypto(cont, &mut digest);
  
     let sig = ed25519::signature(&chash, pri).to_vec();
-    sig
+    Ok(sig)
   }
 
   /// first parameter is public key, second is content and third is signature

@@ -30,6 +30,9 @@ extern crate num;
 #[cfg(feature="serialize")]
 extern crate rustc_serialize;
 
+#[cfg(feature="for_c")]
+extern crate libc;
+
 pub mod striple;
 pub mod anystriple;
 pub mod storage;
@@ -45,6 +48,7 @@ pub mod stripledata;
 mod rsa_openssl;
 #[cfg(feature="cryptoecdsa")]
 mod ecdsa_crypto;
+
 
 
 pub mod striple_kind {
@@ -66,4 +70,8 @@ pub mod striple_kind {
   #[cfg(feature="cryptoecdsa")]
   pub use ecdsa_crypto::EcdsaRipemd160;
 }
+
+#[cfg(feature="for_c")]
+pub mod for_c;
+
 

@@ -7,6 +7,7 @@ use std::io::Write;
 use std::io::Result as IoResult;
 use std::io::{Cursor,Read,Seek,SeekFrom};
 use striple::striple::Striple;
+use striple::striple::Error as StripleError;
 use striple::striple::{PubStriple,PublicScheme};
 use striple::striple::{StripleIf,StripleDisp};
 use striple::striple::{OwnedStripleIf,UnsafeOwnedStripleDisp};
@@ -32,26 +33,26 @@ use striple::striple_kind::EcdsaRipemd160;
 //use striple::striple::IDDerivation;
 //use striple::storage::RemoveKey;
 
-fn genselfpublic<K:StripleKind>(content : String, _ : PhantomData<K>) -> Striple<K> 
+fn genselfpublic<K:StripleKind>(content : String, _ : PhantomData<K>) -> Result<Striple<K>, StripleError>
   where K::S : PublicScheme
 
 {
    let typednone : Option<&Striple<K>> = None;
-  // self public
-  let pubcat : ( Striple<K>, Vec<u8>) = Striple::new (
+   // self public
+   let pubcat = Striple::new (
     vec!(),
     typednone,
     None,
     vec!(),
     Some(BCont::OwnedBytes(content.as_bytes().to_vec())),
   );
-  pubcat.0
+  pubcat.map(|p|p.0)
 }
 
 fn main() {
 
-  let pubcat = genselfpublic("CATEGORY".to_string(), get_public_kind());
-  let pubkind = genselfpublic("KIND".to_string(), get_public_kind());
+  let pubcat = genselfpublic("CATEGORY".to_string(), get_public_kind()).unwrap();
+  let pubkind = genselfpublic("KIND".to_string(), get_public_kind()).unwrap();
  
 
   let (pribase,prikinds) = base_gen(pubcat.get_id().to_vec(), pubkind.get_id().to_vec()).unwrap();
@@ -182,7 +183,7 @@ fn get_public_kind() -> PhantomData<PubRipemd> { PhantomData }
 
 // default to openssl if openssl and rust-crypto are enabled
 #[cfg(feature="public_openssl")]
-fn kind_gen<K : StripleKind>(pri : &BaseStriples<K>) -> Option<KindStriples<PubSha512>> {
+fn kind_gen<K : StripleKind>(pri : &BaseStriples<K>) -> Result<KindStriples<PubSha512>,StripleError> {
   println!("Generating public sha512 base with openssl dependancy");
   gen_kind::<PubSha512,K>(pri,"Striple Lib Public Kind".to_string())
 }
@@ -192,7 +193,7 @@ fn get_kind_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
 }
 // TODO rewrite using get_privatekind 
 #[cfg(feature="opensslrsa")]
-fn base_gen(cat : Vec<u8>, kind : Vec<u8>) -> Option<(BaseStriples<Rsa2048Sha512>,KindStriples<Rsa2048Sha512>)> {
+fn base_gen(cat : Vec<u8>, kind : Vec<u8>) -> Result<(BaseStriples<Rsa2048Sha512>,KindStriples<Rsa2048Sha512>),StripleError> {
   println!("Generating private RSA2048 of sha512 base with openssl dependancy");
   gen_pri::<Rsa2048Sha512>(cat, kind)
 }
@@ -254,9 +255,9 @@ fn get_base_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
 
 
 
-fn gen_pri<K : StripleKind>(cat : Vec<u8>, kind : Vec<u8>) -> Option<(BaseStriples<K>,KindStriples<K>)> {
+fn gen_pri<K : StripleKind>(cat : Vec<u8>, kind : Vec<u8>) -> Result<(BaseStriples<K>,KindStriples<K>),StripleError> {
   let typednone : Option<&(Striple<K>, Vec<u8>)> = None;
-  let ownedRoot : (Striple<K>, Vec<u8>) = Striple::new(
+  let ownedRoot : (Striple<K>, Vec<u8>) = try!(Striple::new(
     // No meta (content encoding def)
     vec!(),
     // recursive from
@@ -267,79 +268,79 @@ fn gen_pri<K : StripleKind>(cat : Vec<u8>, kind : Vec<u8>) -> Option<(BaseStripl
     vec!(),
     // Easilly identifiable content
     Some(BCont::OwnedBytes("ROOT".as_bytes().to_vec())),
-    );
-  let ownedCat : (Striple<K>, Vec<u8>) = Striple::new(
+    ));
+  let ownedCat : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
     Some(&ownedRoot),
     // generic category
     Some(cat),
     vec!(),
     Some(BCont::OwnedBytes("Striple Lib Categories".as_bytes().to_vec())),
-    );
-  let ownedKind : (Striple<K>, Vec<u8>) = Striple::new(
+    ));
+  let ownedKind : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
     Some(&ownedRoot),
     // generic kind
     Some(kind),
     vec!(),
     Some(BCont::OwnedBytes("Striple Lib Kind".as_bytes().to_vec())),
-    );
+    ));
   let base = BaseStriples {
     root : ownedRoot,
     libcat : ownedCat,
     libkind : ownedKind,
   };
-  let kinds = gen_kind(&base, "Striple Lib Verified Kind".to_string());
+  let kinds = try!(gen_kind(&base, "Striple Lib Verified Kind".to_string()));
 
-  Some ((base,kinds.unwrap()))
+  Ok((base,kinds))
 }
 
-fn gen_kind<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel : String) -> Option<KindStriples<K>> {
+fn gen_kind<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel : String) -> Result<KindStriples<K>,StripleError> {
 //fn gen_kind<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel : String) -> Option<KindStriples<K>>  where K::S : PublicScheme {
 
- let ownedVKind : (Striple<K>, Vec<u8>) = Striple::new(
+ let ownedVKind : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
     Some(&pri.root),
     Some(pri.libcat.0.get_about().to_vec()),
     vec!(),
     Some(BCont::OwnedBytes(catlabel.as_bytes().to_vec())),
-    );
- let pubripem : (Striple<K>, Vec<u8>) = Striple::new(
+    ));
+ let pubripem : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
     Some(&ownedVKind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
     Some(BCont::OwnedBytes("Public Ripemd160 derivation".as_bytes().to_vec())),
-    );
- let pubsha512 : (Striple<K>, Vec<u8>) = Striple::new(
+    ));
+ let pubsha512 : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
     Some(&ownedVKind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
     Some(BCont::OwnedBytes("Public Sha512 derivation".as_bytes().to_vec())),
-    );
- let pubsha256 : (Striple<K>, Vec<u8>) = Striple::new(
+    ));
+ let pubsha256 : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
     Some(&ownedVKind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
     Some(BCont::OwnedBytes("Public Sha256 derivation".as_bytes().to_vec())),
-    );
- let rsa2048_sha512 : (Striple<K>, Vec<u8>) = Striple::new(
+    ));
+ let rsa2048_sha512 : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
     Some(&ownedVKind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
     Some(BCont::OwnedBytes("RSA 2048 Sha512 derivation".as_bytes().to_vec())),
-    );
- let ecdsaripemd160 : (Striple<K>, Vec<u8>) = Striple::new(
+    ));
+ let ecdsaripemd160 : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
     Some(&ownedVKind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
     Some(BCont::OwnedBytes("ECDSA(ED25519) Ripemd160 derivation".as_bytes().to_vec())),
-    );
-   Some(KindStriples {
+    ));
+   Ok(KindStriples {
      kind : ownedVKind,
      pubripemd : pubripem,
      pubsha512 : pubsha512,
@@ -356,7 +357,7 @@ fn gen_kind<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel
 pub fn write_striple_with_enc
   <SC : StorageCypher, 
    S  : StripleIf,
-    > (cypher : & SC, striple : &S, pkey : Option<&[u8]>, dest : &mut File, enc : &[u8]) -> IoResult<()> {
+    > (cypher : & SC, striple : &S, pkey : Option<&[u8]>, dest : &mut File, enc : &[u8]) -> Result<(),StripleError> {
  
 //  write_striple(cypher,striple,dest)
 

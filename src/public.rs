@@ -8,6 +8,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use striple::SignatureScheme;
 use striple::PublicScheme;
+use striple::Error;
 use std::io::Read;
 
 /// Technical trait
@@ -22,13 +23,13 @@ pub struct PubSign<H : CHash>(PhantomData<H>);
 /// generic public signature scheme
 impl<H : CHash> SignatureScheme for PubSign<H> {
   /// hash of content and from key (pri)
-  fn sign_content(pri : &[u8], cont : &mut Read) -> Vec<u8> {
-    H::hash(pri, cont)
+  fn sign_content(pri : &[u8], cont : &mut Read) -> Result<Vec<u8>,Error> {
+    Ok(H::hash(pri, cont))
   }
 
   /// first parameter is public key, second is content and third is signature
   fn check_content(publ : &[u8], cont : &mut Read, sig : &[u8]) -> bool {
-    Self::sign_content(publ, cont) == sig
+    Self::sign_content(publ, cont).map(|s|s == sig).unwrap_or(false)
   }
 
   /// create keypair (first is public, second is private)

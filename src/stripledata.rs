@@ -18,7 +18,6 @@ use std::marker::PhantomData;
 use std::fs::File;
 use anystriple::{AnyStriple, copy_builder_any};
 use storage::{FileStripleIterator,init_noread_key};
-use std::io::Result as IOResult;
 use std::env;
 
 #[cfg(feature="serialize")]
@@ -151,7 +150,7 @@ pub fn init_kind_striple_ids () -> Option<KindStriplesIDs> {
   env::var("STRIPLE_BASE").ok().and_then(|path| match File::open(&path) {
     Ok(datafile) => {
       // get striple without key and without Kind (as we define it)
-      let rit : IOResult<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>> = FileStripleIterator::init(datafile, ref_builder_id_copy , &init_noread_key, ());
+      let rit : Result<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>,_> = FileStripleIterator::init(datafile, ref_builder_id_copy , &init_noread_key, ());
       let res = rit.and_then(|mut it|{
         for _ in 0..6 {
           try!(it.skip_striple());

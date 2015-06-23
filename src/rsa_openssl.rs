@@ -7,10 +7,12 @@ extern crate openssl;
 use striple::SignatureScheme;
 use striple::IDDerivation;
 use striple::StripleKind;
+use striple::Error;
 use self::openssl::crypto::hash::{Hasher,Type};
 use self::openssl::crypto::pkey::{PKey};
 use std::io::Write;
 use std::io::Read;
+use std::io::Result as IoResult;
 use stripledata;
 
 #[cfg(test)]
@@ -51,7 +53,7 @@ pub struct Rsa2048;
 /// generic public signature scheme
 impl SignatureScheme for Rsa2048 {
   /// hash of content and from key (pri)
-  fn sign_content(pri : &[u8], cont : &mut Read) -> Vec<u8> {
+  fn sign_content(pri : &[u8], cont : &mut Read) -> Result<Vec<u8>,Error> {
     let mut pkey = PKey::new();
     pkey.load_priv(pri);
     let mut digest = Hasher::new(HASH_SIGN);
@@ -59,21 +61,21 @@ impl SignatureScheme for Rsa2048 {
     let buff = &mut vbuff[..];
 
     loop {
-      let end = cont.read(buff).unwrap();
+      let end = try!(cont.read(buff));
       if end == 0 {
          break
       };
       if end != HASH_BYTE_SIZE {
-       digest.write(&buff[0 .. end]).unwrap();
+       try!(digest.write(&buff[0 .. end]));
       } else {
-        digest.write(buff).unwrap();
+        try!(digest.write(buff));
       };
     };
 
     //digest.write_all(cont).unwrap();
     let tosig = digest.finish();
     //println!("TOSIG {:?} : {:?}",tosig.len(),tosig);
-    pkey.sign_with_hash(&tosig, HASH_SIGN)
+    Ok(pkey.sign_with_hash(&tosig, HASH_SIGN))
   }
 
   /// first parameter is public key, second is content and third is signature
@@ -84,22 +86,21 @@ impl SignatureScheme for Rsa2048 {
     let mut digest = Hasher::new(HASH_SIGN);
     let mut vbuff = vec!(0;HASH_BYTE_SIZE);
     let buff = &mut vbuff[..];
-
+    let res : IoResult<()> = (||{
     loop {
-      let end = cont.read(buff).unwrap();
+      let end = try!(cont.read(buff));
       if end == 0 {
-          break
+        break
       };
       if end != HASH_BYTE_SIZE {
-       digest.write(&buff[0 .. end]).unwrap();
+        try!(digest.write(&buff[0 .. end]));
       } else {
-        digest.write(buff).unwrap();
+        try!(digest.write(buff));
       };
     };
-
-
-//    digest.write_all(cont).unwrap();
-    pkey.verify_with_hash(&digest.finish(), sign, HASH_SIGN)
+    Ok(())
+    })();
+    res.map(|_| pkey.verify_with_hash(&digest.finish(), sign, HASH_SIGN)).unwrap_or(false)
   }
 
   /// create keypair (first is public, second is private)

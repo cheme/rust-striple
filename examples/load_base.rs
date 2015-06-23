@@ -4,7 +4,6 @@ extern crate striple;
 extern crate openssl;
 use std::fs::File;
 use std::io::{stdin,BufRead};
-use std::io::Result as IOResult;
 use std::io::Cursor;
 use striple::storage::FileStripleIterator;
 use striple::striple::NoKind;
@@ -20,7 +19,7 @@ use striple::storage::Pbkdf2;
 /// Plus write base file without password or with encrypted password.
 fn main() {
   let mut datafile = File::open("./baseperm.data").unwrap();
-  let mut rit : IOResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>> = FileStripleIterator::init(datafile, copy_builder_any, &init_any_cipher_stdin, ()); 
+  let mut rit : Result<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_> = FileStripleIterator::init(datafile, copy_builder_any, &init_any_cipher_stdin, ()); 
   let striples : Vec<(AnyStriple,Option<Vec<u8>>)> = rit.unwrap().collect();
 
   // Doing some check based upon knowned structure
@@ -31,7 +30,7 @@ fn main() {
     // try sign check to check privatekey encryption
     let cont = vec!(56,84,8,46,250,6,8,7);
 
-    let sign = ownedroot.sign_content(&ownedroot.private_key_ref(),&mut Cursor::new(&cont[..]));
+    let sign = ownedroot.sign_content(&ownedroot.private_key_ref(),&mut Cursor::new(&cont[..])).unwrap();
 /*    let mut pkey = PKey::new();
     pkey.load_priv (&ownedroot.private_key()[..]);
     let mut pemfile = File::create("./pem.pem").unwrap();

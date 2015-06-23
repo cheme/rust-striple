@@ -104,27 +104,27 @@ impl AnyStriple {
   ) -> Result<(AnyStriple,Vec<u8>), Error> {
   match algoid {
     i if (i == Rsa2048Sha512::get_algo_key()) => {
-      let (s, p) = Striple::new(contentenc, from, about, contentids, content);
+      let (s, p) = try!(Striple::new(contentenc, from, about, contentids, content));
       Ok((AnyStriple::StripleRsa(s), p))
     },
     i if (i == EcdsaRipemd160::get_algo_key()) => {
-      let (s, p) = Striple::new(contentenc, from, about, contentids, content);
+      let (s, p) = try!(Striple::new(contentenc, from, about, contentids, content));
       Ok((AnyStriple::StripleECDSA(s), p))
     },
     i if (i == PubSha512::get_algo_key()) => {
-      let (s, p) = Striple::new(contentenc, from, about, contentids, content);
+      let (s, p) = try!(Striple::new(contentenc, from, about, contentids, content));
       Ok((AnyStriple::StriplePSha512(s), p))
     },
     i if (i == PubSha256::get_algo_key()) => {
-      let (s, p) = Striple::new(contentenc, from, about, contentids, content);
+      let (s, p) = try!(Striple::new(contentenc, from, about, contentids, content));
       Ok((AnyStriple::StriplePSha256(s), p))
     },
     i if (i == PubRipemd::get_algo_key()) => {
-      let (s, p) = Striple::new(contentenc, from, about, contentids, content);
+      let (s, p) = try!(Striple::new(contentenc, from, about, contentids, content));
       Ok((AnyStriple::StriplePRIP(s), p))
     },
     _ => {
-      Err(Error("Unresolved kind and no default kind defined".to_string(), ErrorKind::UnexpectedStriple))
+      Err(Error("Unresolved kind and no default kind defined".to_string(), ErrorKind::UnexpectedStriple, None))
     },
   }
 
