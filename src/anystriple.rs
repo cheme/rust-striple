@@ -93,11 +93,11 @@ pub fn copy_builder_any(algoid :&[u8], sr : StripleRef<NoKind>) -> Result<AnyStr
 }
 
 impl AnyStriple {
-/// contstructor over typed striple one
-  pub fn new<SF : OwnedStripleIf> (
+  /// contstructor over typed striple one
+  pub fn new (
     algoid :&[u8], 
     contentenc : Vec<u8>,
-    from : Option<&SF>,
+    from : Option<&OwnedStripleIf>,
     about: Option<Vec<u8>>,
     contentids : Vec<Vec<u8>>,
     content : Option<BCont<'static>>,

@@ -37,11 +37,10 @@ fn genselfpublic<K:StripleKind>(content : String, _ : PhantomData<K>) -> Result<
   where K::S : PublicScheme
 
 {
-   let typednone : Option<&Striple<K>> = None;
    // self public
    let pubcat = Striple::new (
     vec!(),
-    typednone,
+    None,
     None,
     vec!(),
     Some(BCont::OwnedBytes(content.as_bytes().to_vec())),
@@ -256,12 +255,11 @@ fn get_base_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
 
 
 fn gen_pri<K : StripleKind>(cat : Vec<u8>, kind : Vec<u8>) -> Result<(BaseStriples<K>,KindStriples<K>),StripleError> {
-  let typednone : Option<&(Striple<K>, Vec<u8>)> = None;
   let ownedRoot : (Striple<K>, Vec<u8>) = try!(Striple::new(
     // No meta (content encoding def)
     vec!(),
     // recursive from
-    typednone,
+    None,
     // recursive about
     None,
     // no contentids

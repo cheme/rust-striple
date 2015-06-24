@@ -266,14 +266,14 @@ pub trait SignatureScheme {
 pub trait OwnedStripleIf : StripleIf {
 
   /// owned striple has a private key, default implementation is inefficient
-  fn private_key (&self) -> Vec<u8> {
+  fn private_key(&self) -> Vec<u8> {
     self.private_key_ref().to_vec()
   }
 
-  fn private_key_ref<'a> (&'a self) -> &'a[u8];
+  fn private_key_ref(&self) -> &[u8];
 
   /// first parameter is private key, second parameter is content
-  fn sign<ST : StripleIf>(&self, st : &ST) -> Result<Vec<u8>, Error> {
+  fn sign(&self, st : &StripleIf) -> Result<Vec<u8>, Error> {
     let (v, obc) = st.get_tosig();
     let mut cv = Cursor::new(v);
     match obc {
@@ -312,7 +312,7 @@ impl<ST : StripleIf> OwnedStripleIf for (ST, Vec<u8>) {
   }
 
   #[inline]
-  fn private_key_ref<'a> (&'a self) -> &'a[u8] {
+  fn private_key_ref (&self) -> &[u8] {
     &self.1[..]
   }
 
@@ -326,7 +326,7 @@ impl<'b, ST : StripleIf> OwnedStripleIf for (&'b ST, &'b [u8]) {
   }
 
   #[inline]
-  fn private_key_ref<'a> (&'a self) -> &'a[u8] {
+  fn private_key_ref (&self) -> &[u8] {
     self.1
   }
 
@@ -354,7 +354,7 @@ impl<S : PubStriple> OwnedStripleIf for S {
     self.get_key().to_vec()
   }
 
-  fn private_key_ref<'a> (&'a self) -> &'a[u8] {
+  fn private_key_ref (&self) -> &[u8] {
     self.get_key()
   }
 }
@@ -403,7 +403,7 @@ pub struct StripleRef<'a, T : StripleKind> {
 // identic code for stripleref and striple   
 macro_rules! ser_content(() => (
   #[inline]
-  fn ser_tosig2<'b> (&'b self, res : &mut Vec<u8>) -> Option<&'b BCont<'b>> {
+  fn ser_tosig<'b> (&'b self, res : &mut Vec<u8>) -> Option<&'b BCont<'b>> {
     let mut tmplen;
 
     // never encode the same value for about and id
@@ -455,9 +455,9 @@ impl<T : StripleKind> Striple<T> {
   /// None for `about` is the same as using `from` id.
   /// Return the initialized striple and its private key.
   /// TODO return result (add sign error and bcont error)
-  pub fn new<SF : OwnedStripleIf> (
+  pub fn new (
     contentenc : Vec<u8>,
-    from : Option<&SF>,
+    from : Option<&OwnedStripleIf>,
     about: Option<Vec<u8>>,
     contentids : Vec<Vec<u8>>,
     content : Option<BCont<'static>>,
@@ -559,7 +559,7 @@ impl<T : StripleKind> StripleIf for Striple<T> {
     res.push_all(&xtendsize(tmplen,SIG_LENGTH));
     res.push_all(&self.sig);
 
-    let ocon = self.ser_tosig2(&mut res);
+    let ocon = self.ser_tosig(&mut res);
 
     (res,ocon)
   }
@@ -592,7 +592,7 @@ impl<T : StripleKind> StripleIf for Striple<T> {
   }
   fn get_tosig<'a>(&'a self) -> (Vec<u8>,Option<&'a BCont<'a>>) {
     let mut res = Vec::new();
-    let oc =  self.ser_tosig2(&mut res);
+    let oc =  self.ser_tosig(&mut res);
     (res, oc)
   }
 }
@@ -636,7 +636,7 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
     res.push_all(&xtendsize(tmplen,SIG_LENGTH));
     res.push_all(self.sig);
 
-    let ocon = self.ser_tosig2(&mut res);
+    let ocon = self.ser_tosig(&mut res);
 
     (res,ocon)
   }
@@ -668,7 +668,7 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
   #[inline]
   fn get_tosig<'b>(&'b self) -> (Vec<u8>,Option<&'b BCont<'b>>) {
     let mut res = Vec::new();
-    let oc = self.ser_tosig2(&mut res);
+    let oc = self.ser_tosig(&mut res);
     (res, oc)
   }
 }
@@ -1685,10 +1685,9 @@ pub mod test {
   // With test for altering integrity (mut striple).
   pub fn chaining_test<K1 : StripleKind, K2 : StripleKind> () {
     let contentenc = random_bytes(99);
-    let recrootsign : Option<&(&Striple<K1>, &[u8])> = None;
     let ownedroot : (Striple<K1>, Vec<u8>) = Striple::new(
       contentenc.clone(),
-      recrootsign,
+      None,
       None,
       Vec::new(),
       Some(BCont::OwnedBytes(random_bytes(333))),
@@ -1979,5 +1978,4 @@ pub static BASE64CONF : base64::Config = base64::Config {
     pad : true,
     line_length : None,
 };
-
 

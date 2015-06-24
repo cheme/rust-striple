@@ -33,7 +33,7 @@ use std::fs;
 use std::path;
 use std::io::{Read,Write,Seek,SeekFrom};
 use striple::anystriple::{AnyStriple, copy_builder_any};
-use striple::striple::{BCont,NoKind,StripleDisp, StripleIf,Striple, StripleRef};
+use striple::striple::{BCont,NoKind,StripleDisp,StripleIf,OwnedStripleIf,Striple, StripleRef};
 #[cfg(feature="serialize")]
 use striple::striple::BASE64CONF;
 use striple::striple::Error as StripleError;
@@ -314,11 +314,11 @@ fn run() {
      } else {
        match from.1 {
          Some(pass) => {
-       if pass.len() == 0 {
-         panic!("Origin cannot initiate a new striple (not owned)")
-       } else {
-         Some((from.0, pass))
-       }
+           if pass.len() == 0 {
+             panic!("Origin cannot initiate a new striple (not owned)")
+           } else {
+             Some((from.0, pass))
+           }
          },
          None => panic!("Origin cannot initiate a new striple (not owned)"),
       }
@@ -326,10 +326,15 @@ fn run() {
    } else {
      None
    };
+//   let owfrom : Option<&OwnedStripleIf>= ofrom.as_ref();
+   let owfrom : Option<&OwnedStripleIf> = match ofrom {
+     Some(ref f) => Some (f),
+     None => None,
+   };
    let ownedStriple : (AnyStriple, Vec<u8>) = AnyStriple::new(
       &kindid[..],
       encid,
-      ofrom.as_ref(),
+      owfrom,
       aboutid,
       contentids,
       content,
