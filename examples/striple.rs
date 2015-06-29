@@ -16,6 +16,7 @@
 #![feature(collections)] // only use for a push_all : TODO remove when better extend
 #![feature(plugin)]
 #![plugin(docopt_macros)]
+#![feature(vec_push_all)]
 extern crate docopt;
 
 extern crate striple;
