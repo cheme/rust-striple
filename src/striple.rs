@@ -917,6 +917,7 @@ pub trait AsStriple<'a, T : StripleKind>  {
 impl<'a, T : StripleKind> AsStriple<'a, T> for StripleRef<'a,T> {
   type Target = Striple<T>;
   fn as_striple(&'a self) -> Striple<T> {
+
     let contentids = self.contentids.iter().map(|r|r.to_vec()).collect();
     let newcontent = self.content.as_ref().map(|c|c.to_own());
  

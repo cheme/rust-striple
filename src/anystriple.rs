@@ -130,6 +130,7 @@ impl AnyStriple {
 
   }
 
+  /// TODO replace by as_public (&self) -> Option<PubAnyStriple>
   pub fn is_public(&self) -> bool {
     match self {
       &AnyStriple::StriplePSha512(_) => {

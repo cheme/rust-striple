@@ -486,6 +486,7 @@ pub fn read_striple
    B,
     > (cypher : &SC, from : &mut R, copy_builder : B) -> Result<(T,Option<Vec<u8>>),StripleError>
   where B : Fn(&[u8], StripleRef<SK>) -> Result<T, StripleError> {
+
   let tag = &mut [0];
   try!(from.read(tag));
   let bcon = match tag[0] {
@@ -670,7 +671,7 @@ pub fn init_any_cipher_stdin<R: Read> (file : &mut R, _ : ()) -> Result<AnyCyphe
 
 
 // TODO switch to associated types
-pub struct FileStripleIterator<SK : StripleKind, T : StripleIf, R : Read + Seek, C : StorageCypher, B> (pub R, pub C, B, PhantomData<SK>, pub u64)
+pub struct FileStripleIterator<SK : StripleKind, T : StripleIf, R : Read + Seek, C : StorageCypher, B> (pub R, pub C, pub B, PhantomData<SK>, pub u64)
   where B : Fn(&[u8], StripleRef<SK>) -> Result<T, StripleError>;
   //where B : Fn(&[u8], Striple<SK>) -> Result<T, StripleError>;
 
@@ -799,8 +800,9 @@ impl<SK : StripleKind, T : StripleIf, R : Read + Seek, B, C : StorageCypher> Ite
   type Item = (T,Option<Vec<u8>>);
 
   fn next(&mut self) -> Option<Self::Item> {
+    println!("start next");
     let res = read_striple::<_,SK,_,_,_>(&self.1, &mut self.0, &self.2);
-//    println!("{:?}",res);
+    println!("{:?}",res);
         
     res.ok()
   }

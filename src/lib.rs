@@ -16,6 +16,8 @@
 #![feature(core)]
 
 #![feature(debug_builders)]
+#![feature(cstr_memory)]
+#![feature(alloc)]
 /*
 #[cfg(not(for_c))]
 #[macro_use] extern crate std;
