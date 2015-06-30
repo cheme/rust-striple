@@ -3,6 +3,12 @@
 name = "striple"
 version = "0.0.1"
 authors = ["Emeric Chevalier <emericchevalier.pro@gmail.com>"]
+license = "MIT/Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/cheme/rust-striple"
+description = "striple support for rust."
+exclude = ["*"]
+include = ["src/**/*","examples/**/*","Cargo.toml","README.md"]
 
 
 [lib]
