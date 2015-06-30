@@ -12,11 +12,11 @@
 use striple::Striple;
 use striple::{StripleKind,NoKind};
 use striple::{StripleIf};
-use striple::{OwnedStripleIf,UnsafeOwnedStripleDisp,ref_builder_id_copy};
-use std::marker::PhantomData;
+use striple::{ref_builder_id_copy};
+#[cfg(feature="serialize")]
+use striple::{UnsafeOwnedStripleDisp};
 
 use std::fs::File;
-use anystriple::{AnyStriple, copy_builder_any};
 use storage::{FileStripleIterator,init_noread_key};
 use std::env;
 
@@ -27,8 +27,10 @@ use std::fmt::{Display,Formatter};
 
 #[cfg(feature="opensslrsa")]
 use rsa_openssl::Rsa2048Sha512;
+#[cfg(not(feature="opensslrsa"))]
 #[cfg(feature="cryptoecdsa")]
 use ecdsa_crypto::EcdsaRipemd160;
+#[cfg(not(feature="public_openssl"))]
 #[cfg(feature="public_crypto")]
 use public::public_crypto::PubRipemd;
 #[cfg(feature="public_openssl")]

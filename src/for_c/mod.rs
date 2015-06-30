@@ -18,12 +18,10 @@ use striple::{StripleIf,OwnedStripleIf,BCont,striple_dser,NoKind,StripleRef,Erro
 use anystriple::{AnyStriple,copy_builder_any};
 use std::mem::transmute;
 use storage::{FileStripleIterator,init_any_cipher_stdin,AnyCyphers};
-use std::ffi::CString;
 use std::fs::File;
 use libc::{size_t,c_char,strlen};
-use std::path::Path;
-use std::boxed;
 use std::ptr;
+use std::slice;
 
 #[repr(C)]
 pub type striple_ptr = *const AnyStriple;
@@ -229,8 +227,8 @@ pub unsafe extern "C" fn new_striple(
   from : Option<owned_striple_ptr>,
   about : Option<*mut u8>,
   about_l : size_t,
-  contentids : Option<striple_bytes_array>,
-  content : Option<striple_bcont>,
+  _ : Option<striple_bytes_array>,
+  _ : Option<striple_bcont>,
   ) -> Option<owned_striple_ptr> {
 /*
  *  pub fn new<SF : OwnedStripleIf> (
@@ -286,18 +284,18 @@ pub unsafe extern "C" fn file_iter(cpath : *const c_char) -> striple_iter {
   let len = strlen(cpath);
   let cpathu8 : *const u8 = transmute(cpath);
 
-  let rpath = Vec::from_raw_buf(cpathu8, len as usize);
-  let spath = String::from_utf8_lossy(&rpath[..]);
+  let rpath = slice::from_raw_parts(cpathu8, len as usize);
+  let spath = String::from_utf8_lossy(rpath);
 //  let rpath = "./baseperm.data".to_string();
   println!("Path is {:?}",rpath);
-  let mut datafile = File::open(&(*spath)).ok();
+  let datafile = File::open(&(*spath)).ok();
   let r = if datafile.is_none(){
     ptr::null_mut()
   } else {
     let f = datafile.unwrap();
     let ptrfnbuild : fn(&[u8], StripleRef<NoKind>) -> Result<AnyStriple, Error> = copy_builder_any ;
 
-    let mut rit : Result<CIfIter,Error> = FileStripleIterator::init(f, ptrfnbuild, init_any_cipher_stdin, ());
+    let rit : Result<CIfIter,Error> = FileStripleIterator::init(f, ptrfnbuild, init_any_cipher_stdin, ());
     match rit {
       Ok(mut it) => {
 
@@ -305,7 +303,7 @@ pub unsafe extern "C" fn file_iter(cpath : *const c_char) -> striple_iter {
         let tmptrit : *mut CIfIter = &mut it;
         println!("ptr st in rust : {:?}", tmptrit);
         let h = Box::new(it);
-        let mptrit : *mut CIfIter = boxed::into_raw(h);
+        let mptrit : *mut CIfIter = Box::into_raw(h);
         println!("ptr hea in rust : {:?}", mptrit);
         mptrit
 //        tmptrit
@@ -326,13 +324,13 @@ pub unsafe extern "C" fn dispptr(iter : *const ())  {
 }
   
 #[no_mangle]
-pub unsafe extern "C" fn iter_next(mut iter : striple_iter) -> *const either_owned {
+pub unsafe extern "C" fn iter_next(iter : striple_iter) -> *const either_owned {
         println!("ptr st in next : {:?}", iter);
   let iter : &mut CIfIter = transmute(iter);
   println!("bef match");
   match iter.next() {
     Some(v) => match v.1 {
-      Some(k) => {
+      Some(_) => {
   println!("in some");
         let st = Box::new((v.0, vec!()));
         &(*Box::new(either_owned {
@@ -345,7 +343,7 @@ pub unsafe extern "C" fn iter_next(mut iter : striple_iter) -> *const either_own
 //          let disp : *const AnyStriple = transmute (&v.0);
 //          println!("debug public ptr rust : {:?}",disp);
         println!("res owned");
-        let mut st = Box::new((v.0, vec!()));
+        let st = Box::new((v.0, vec!()));
         let disp : *const () = transmute(&(* st));
         println!("ret pt : {:?}",disp);
         &(*Box::new(either_owned {

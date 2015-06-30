@@ -10,24 +10,12 @@
 #![feature(no_std)]
 #![no_std]
 */
-#![feature(collections)]
 #![feature(convert)] // for a recently add path to_bytes method TODO test without later
 #![feature(path_relative_from)] // for storage TODO remove when fix
-#![feature(core)]
 #![feature(vec_push_all)]
 #![feature(ptr_as_ref)]
-#![feature(vec_from_raw_buf)]
 #![feature(box_raw)]
 
-#![feature(debug_builders)]
-#![feature(cstr_memory)]
-#![feature(alloc)]
-/*
-#[cfg(not(for_c))]
-#[macro_use] extern crate std;
-/* for_c config : fake std reexport from core TODO
- **/
-*/
 
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;

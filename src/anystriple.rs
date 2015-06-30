@@ -4,7 +4,8 @@
 //! overriden in applications.
 //!
 
-use striple::{BCont,AsStripleIf,Striple,StripleRef,NoKind,Error,ref_as_kind,StripleKind,AsStriple,StripleIf,OwnedStripleIf, PubStriple,PublicScheme,ErrorKind};
+use striple::{BCont,AsStripleIf,Striple,StripleRef,Error,ref_as_kind,StripleKind,AsStriple,StripleIf,OwnedStripleIf,ErrorKind};
+use striple::NoKind;
 #[cfg(feature="opensslrsa")]
 use rsa_openssl::Rsa2048Sha512;
 #[cfg(feature="cryptoecdsa")]

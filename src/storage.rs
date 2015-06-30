@@ -18,7 +18,7 @@ use std::io::{stdin,BufRead,Cursor};
 use std::env;
 use std::fs::File;
 use std::fs::metadata;
-use striple::{Striple,StripleIf,StripleKind,xtendsize,xtendsizeread,xtendsizeread_foralloc,StripleRef};
+use striple::{StripleIf,StripleKind,xtendsize,xtendsizeread,xtendsizeread_foralloc,StripleRef};
 use std::marker::PhantomData;
 use striple::Error as StripleError;
 use striple::ErrorKind as StripleErrorKind;
@@ -148,7 +148,7 @@ pub struct RemoveKey;
 /// cypher key with pbkdf2 hmac sha1 and AES-256-CBC
 /// Note a different salt is used for every striples
 pub struct Pbkdf2 {
-  pass : String,
+  //pass : String,
   iter : usize,
   keylength : usize,
   salt : Vec<u8>,
@@ -200,7 +200,7 @@ impl Pbkdf2 {
     let key = pbkdf2_hmac_sha1(&pass[..], &salt[..], iter, kl);
     crypter.pad(true);
     Pbkdf2 {
-      pass : pass,
+      //pass : pass,
       iter : iter, 
       keylength : kl,
       salt : salt,
@@ -272,7 +272,7 @@ impl StorageCypher for NoCypher {
 }
 
 
-fn writetorandfile(cont : &[u8], dest : &mut Write) -> IOResult<String> {
+fn writetorandfile(cont : &[u8], _ : &mut Write) -> IOResult<String> {
    // using random 64bit int as name
    let mut id = rand::thread_rng().next_u64();
    let mut try = 0;
@@ -281,17 +281,17 @@ fn writetorandfile(cont : &[u8], dest : &mut Write) -> IOResult<String> {
      if metadata(&fname).is_err(){
        break
      };
-     let mut id = rand::thread_rng().next_u64();
-     let mut fname = format!("./{}_.stref",id);
-       try += 1;
-       if try > 500 {
-         return Err(Error::new(ErrorKind::Other, "Problem creating temporary file, there may be too many"));
-         //panic!("Problem creating temporary file");
-       }
+     id = rand::thread_rng().next_u64();
+     fname = format!("./{}_.stref",id);
+     try += 1;
+     if try > 500 {
+       return Err(Error::new(ErrorKind::Other, "Problem creating temporary file, there may be too many"));
+       //panic!("Problem creating temporary file");
      }
-     let mut f = try!(File::create(&fname));
-     try!(f.write_all(cont));
-     Ok(fname)
+   }
+   let mut f = try!(File::create(&fname));
+   try!(f.write_all(cont));
+   Ok(fname)
 }
  
 // return true if content need to be added at the end of entry
@@ -344,11 +344,11 @@ fn writebcontheader(cont : &[u8], fm : &FileMode, dest : &mut Write) -> Result<b
         Ok(true)
       })
     },
-    &FileMode::Managed(ref otresh, ref path) => {
-      panic!("TODO imp managed")
+    &FileMode::Managed(_, ref path) => {
+      panic!("TODO imp managed {:?}", path)
     },
-    &FileMode::ManagedSim(ref otresh, ref path) => {
-      panic!("TODO imp simlink")
+    &FileMode::ManagedSim(_, ref path) => {
+      panic!("TODO imp managed {:?}", path)
     },
   }
 }
@@ -398,10 +398,10 @@ fn writelocalpathheader(path : &PathBuf, fm : &FileMode, dest : &mut Write) -> R
       Ok(false)
     },
     &FileMode::Managed(_, ref path) => {
-      panic!("TODO imp managed")
+      panic!("TODO imp managed {:?}", path)
     },
     &FileMode::ManagedSim(_, ref path) => {
-      panic!("TODO imp simlink")
+      panic!("TODO imp simlink {:?}", path)
     },
   }
 }
@@ -639,7 +639,7 @@ pub fn init_any_cipher_stdin<R: Read> (file : &mut R, _ : ()) -> Result<AnyCyphe
         // remove terminal \n
         pass.pop();
  
-        let (iter, keylength, salt) = try!(Pbkdf2::read_pbkdf2_header (file));
+        let (iter, _, salt) = try!(Pbkdf2::read_pbkdf2_header (file));
         let pbk = Pbkdf2::new(pass,iter,Some(salt));
         Ok(AnyCyphers::Pbkdf2(pbk))
       },
@@ -652,7 +652,7 @@ pub fn init_any_cypher_with_pass<R: Read> (file : &mut R, pass : String) -> Resu
   match idcypher {
       0 => Ok(AnyCyphers::NoCypher(NoCypher)),
       1 => {
-        let (iter, keylength, salt) = try!(Pbkdf2::read_pbkdf2_header (file));
+        let (iter, _, salt) = try!(Pbkdf2::read_pbkdf2_header (file));
         let pbk = Pbkdf2::new(pass,iter,Some(salt));
         Ok(AnyCyphers::Pbkdf2(pbk))
       },
@@ -739,7 +739,7 @@ pub fn skip_striple (&mut self) -> IOResult<()> {
 
   /// get entry length full
   pub fn get_entryposlength (&mut self, ix : usize) -> IOResult<(u64,usize)> {
-    let posstart = try!(self.0.seek(SeekFrom::Current(0)));
+    //let posstart = try!(self.0.seek(SeekFrom::Current(0)));
     try!(self.0.seek(SeekFrom::Start(self.4)));
     for _ in 0..ix {
       try!(self.skip_striple());
@@ -789,7 +789,7 @@ pub fn recode_entry<C1 : StorageCypher, C2 : StorageCypher> (entrybytes : &[u8],
   }
   result.push_all(&newprivsize[..]);
   result.push_all(&newpriv[..]);
-  entry.read_to_end(&mut result);
+  try!(entry.read_to_end(&mut result));
 
   Ok(result) 
 
@@ -823,10 +823,9 @@ pub mod test {
 //  use striple::copy_builder_id;
   use striple::ref_builder_id_copy;
   use striple::NoKind;
-  use storage::{FileMode,NoCypher,write_striple,read_striple,write_striple_file_ref,FileStripleIterator,init_no_cipher,init_any_cypher_with_pass};
-  use striple::test::{sampleStriple1,sampleStriple2,sampleStriple3,sampleStriple4,random_bytes,compare_striple};
+  use storage::{FileMode,NoCypher,write_striple,read_striple,write_striple_file_ref,FileStripleIterator,init_any_cypher_with_pass};
+  use striple::test::{sample_striple1,sample_striple2,sample_striple3,sample_striple4,random_bytes,compare_striple};
   use std::io::{Cursor,Seek,SeekFrom};
-  use std::io::Result as IOResult;
 
   #[test]
   fn test_striple_enc_dec () {
@@ -842,12 +841,12 @@ pub mod test {
   fn striple_enc_dec (fm : &FileMode) {
     let tmpvec : Vec<u8> = Vec::new();
     let mut buf = Cursor::new(tmpvec);
-    let striple1 = sampleStriple1();
-    let striple2 = sampleStriple2();
+    let striple1 = sample_striple1();
+    let striple2 = sample_striple2();
     // long content striple
-    let striple3 = sampleStriple3();
+    let striple3 = sample_striple3();
     // file attached
-    let striple4 = sampleStriple4();
+    let striple4 = sample_striple4();
     let pkey = random_bytes(18);
     debug!("{:?}", buf);
     let mut wr = write_striple(&NoCypher, &striple1, None, fm, &mut buf);
@@ -894,8 +893,8 @@ pub mod test {
   fn test_striple_enc_dec_file () {
     let tmpvec : Vec<u8> = Vec::new();
     let mut buf = Cursor::new(tmpvec);
-    let striple1 = sampleStriple1();
-    let striple2 = sampleStriple2();
+    let striple1 = sample_striple1();
+    let striple2 = sample_striple2();
     let pkey = random_bytes(18);
     let mut vecst : Vec<(&Striple<NoKind>,Option<&[u8]>)> = Vec::new();
     vecst.push((&striple1,None));
@@ -903,7 +902,6 @@ pub mod test {
     let wr = write_striple_file_ref(&NoCypher, &mut vecst.iter().map(|p|(p.0,p.1)), &FileMode::NoFile, &mut buf);
     assert!(wr.is_ok());
     let rit : Result<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>,_> = FileStripleIterator::init(buf, ref_builder_id_copy, init_any_cypher_with_pass, "pass".to_string()); 
-    //let mut rit : IOResult<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>> = FileStripleIterator::init(buf, ref_builder_id_copy, init_no_cipher, ()); 
     assert!(rit.is_ok());
     let mut it = rit.unwrap();
  
@@ -922,7 +920,7 @@ pub mod test {
 
     assert!(compare_striple(&st1.unwrap().0,&striple1));
     // to lose position
-    it.get(0);
+    it.get(0).unwrap();
 
     let st2 = it.next();
     assert!(st2.is_some());

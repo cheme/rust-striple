@@ -11,19 +11,19 @@ use striple::anystriple::{AnyStriple, copy_builder_any};
 //use striple::striple::copy_as_kind;
 use striple::striple::StripleIf;
 use striple::striple::OwnedStripleIf;
-use striple::storage::{FileMode,write_striple_file_ref,NoCypher,RemoveKey,init_any_cipher_stdin};
+use striple::storage::{FileMode,write_striple_file_ref,RemoveKey,init_any_cipher_stdin};
 #[cfg(feature="opensslpbkdf2")]
 use striple::storage::Pbkdf2;
 
 /// load base file produced by generate example (privatekey clear).
 /// Plus write base file without password or with encrypted password.
 fn main() {
-  let mut datafile = File::open("./baseperm.data").unwrap();
-  let mut rit : Result<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_> = FileStripleIterator::init(datafile, copy_builder_any, &init_any_cipher_stdin, ()); 
+  let datafile = File::open("./baseperm.data").unwrap();
+  let rit : Result<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_> = FileStripleIterator::init(datafile, copy_builder_any, &init_any_cipher_stdin, ()); 
   let striples : Vec<(AnyStriple,Option<Vec<u8>>)> = rit.unwrap().collect();
 
   // Doing some check based upon knowned structure
-  if (striples[0].1.is_some()){
+  if striples[0].1.is_some() {
     println!("doing root checking");
     let ownedroot = (&striples[0].0, &striples[0].1.as_ref().unwrap()[..]);
 
@@ -46,7 +46,7 @@ fn main() {
     assert!(striples[4].0.check(&ownedroot) == true);
   }
   // Doing some public check
-   if (striples[11].1.is_none()){
+   if striples[11].1.is_none() {
     println!("doing public checking");
     let ownedkind = (&striples[11].0, &[][..]);
 
@@ -60,7 +60,7 @@ fn main() {
   //  let refvec : Vec<(&AnyStriple,Option<&[u8]>)> = striples.iter().map(|i|(&i.0,i.1.as_ref().map(|o|&o[..]))).collect();
   let mut it = striples.iter().map(|i|(&i.0,i.1.as_ref().map(|o|&o[..])));
   // let wr = write_striple_file_ref(&RemoveKey, &mut refvec.iter(), &mut datafile);
-  let wr = write_striple_file_ref(&RemoveKey, &mut it, &FileMode::NoFile, &mut datafile);
+  write_striple_file_ref(&RemoveKey, &mut it, &FileMode::NoFile, &mut datafile).unwrap();
 
   writepkbdf2(&striples);
 
@@ -77,14 +77,14 @@ fn writepkbdf2(striples : &Vec<(AnyStriple,Option<Vec<u8>>)>) {
   let mut it = striples.iter().map(|i|(&i.0,i.1.as_ref().map(|o|&o[..])));
 
   println!("writing as protected, please input passphrase ?");
-  let mut tstdin = stdin();
+  let tstdin = stdin();
   let mut stdin = tstdin.lock();
   let mut pass = String::new();
-  stdin.read_line(&mut pass);
+  stdin.read_line(&mut pass).unwrap();
   // remove terminal \n
   pass.pop();
   let pbk = Pbkdf2::new(pass,2000,None);
-  let wr = write_striple_file_ref(&pbk, &mut it, &FileMode::NoFile, &mut datafile);
+  write_striple_file_ref(&pbk, &mut it, &FileMode::NoFile, &mut datafile).unwrap();
 
 }
 

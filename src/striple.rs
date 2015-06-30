@@ -13,7 +13,6 @@ use std::io::{Read};
 use std::io::Result as IOResult;
 use std::io::Cursor;
 use std::fs::File;
-use std::path::Path;
 use std::path::PathBuf;
 use std::fs::metadata;
 pub const NOKEY : &'static [u8] = &[];
@@ -797,11 +796,15 @@ pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (byte
     };
     obc
   } else {
-    ix = ix + s;
-    if ix <= bytes.len() {
-      Some(BCont::NotOwnedBytes(&bytes[ix - s .. ix]))
+    if s == 0 {
+      None
     } else {
-      return Err(Error("Mismatch size of content".to_string(), ErrorKind::DecodingError, None))
+      ix = ix + s;
+      if ix <= bytes.len() {
+        Some(BCont::NotOwnedBytes(&bytes[ix - s .. ix]))
+      } else {
+        return Err(Error("Mismatch size of content".to_string(), ErrorKind::DecodingError, None))
+      }
     }
   };
   if ix != bytes.len() {
@@ -974,7 +977,7 @@ impl<T : StripleKind> Encodable for Striple<T> {
             v.push_all(&vcon[..]);
             v.encode(s)
           },
-          Err(e) => {
+          Err(_) => {
             // TODO follow this https://github.com/rust-lang/rustc-serialize/issues/76
             // for now panic
             panic!("cannot add BCont when serializing")
@@ -1090,7 +1093,6 @@ pub fn xtendsizedec(bytes : &[u8], ix : &mut usize, nbbyte : usize) -> usize {
     return 0;
   };
  
-  let mut res : usize = 0;
   let mut nbbytes = nbbyte;
   let mut idx = *ix;
   let mut adj_ix = 0;
@@ -1102,7 +1104,7 @@ pub fn xtendsizedec(bytes : &[u8], ix : &mut usize, nbbyte : usize) -> usize {
     nbbytes += adj_ix;
     idx += 1;
   }
-  res = unsafe {
+  let res = unsafe {
   let mut v : [u8;8] = mem::transmute(0usize);
   debug!("DEBUG_bef {:?}, {:?} !!!",v, nbbytes);
   if idx + nbbytes <= bytes.len() {
@@ -1380,7 +1382,6 @@ pub fn ref_copy_as_kind<'a, SK : StripleKind> (nk : &StripleRef<'a,NoKind>) -> S
 #[cfg(test)]
 pub mod test {
   extern crate rand;
-  use std::env;
   use std::fs;
   use std::path::PathBuf;
   use std::fs::File;
@@ -1456,7 +1457,7 @@ pub mod test {
     }
   }
 
-  pub fn sampleStriple1() -> Striple<NoKind> {
+  pub fn sample_striple1() -> Striple<NoKind> {
     let common_id = random_bytes(4);
     let common_id_2 = random_bytes(2);
     Striple {
@@ -1472,8 +1473,8 @@ pub mod test {
         phtype : PhantomData,
     }
   }
-  pub fn sampleStriple2() -> Striple<NoKind> {
-    let common_id = random_bytes(4);
+  pub fn sample_striple2() -> Striple<NoKind> {
+    //let common_id = random_bytes(4);
     let common_id_2 = random_bytes(2);
     Striple {
         contentenc : vec!(),
@@ -1490,8 +1491,8 @@ pub mod test {
     }
   }
   // like sample 2 but with long content (>512)
-  pub fn sampleStriple3() -> Striple<NoKind> {
-    let common_id = random_bytes(4);
+  pub fn sample_striple3() -> Striple<NoKind> {
+    //let common_id = random_bytes(4);
     let common_id_2 = random_bytes(2);
     let longcontent = random_bytes(600);
     Striple {
@@ -1510,19 +1511,19 @@ pub mod test {
   }
   // like sample 2 but with attached file
   // Warning this is pretty unsafe
-  pub fn sampleStriple4() -> Striple<NoKind> {
-    let common_id = random_bytes(40);
+  pub fn sample_striple4() -> Striple<NoKind> {
+//    let common_id = random_bytes(40);
     let common_id_2 = random_bytes(20);
     let longcontent = random_bytes(600);
     let path = { 
       //let tmpdir = env::temp_dir();
       let tmpdir = PathBuf::new(); // TODO tmpdir when relative path ok??
       let mytmpdirpath = tmpdir.join("./test_rust_striple_sample");
-      fs::create_dir_all(&mytmpdirpath);
+      fs::create_dir_all(&mytmpdirpath).unwrap();
       let fpath = mytmpdirpath.join("striple4.file");
       debug!("Creating tmp file : {:?}",fpath);
       let mut f = File::create(&fpath).unwrap();
-      f.write_all(&longcontent[..]);
+      f.write_all(&longcontent[..]).unwrap();
       fpath
     };
     Striple {
@@ -1545,10 +1546,8 @@ pub mod test {
 
   #[test]
   fn test_striple_enc_dec () { // TODO !!! same test with file usage (due to long content and actual file)
-    let common_id_2 = random_bytes(2);
-//pub fn as_kind<'a, K : StripleIf<NoKind>, SK : StripleKind, S : StripleIf<SK>> (nk : &'a K) -> &'a S {
-    let ori_1tmp = sampleStriple1();
-    let mut ori_2tmp = sampleStriple2();
+    let ori_1tmp = sample_striple1();
+    let mut ori_2tmp = sample_striple2();
     let ori_1 : &Striple<TestKind1> = as_kind(&ori_1tmp);
     let ori_2 : &mut Striple<TestKind1> = mut_as_kind(&mut ori_2tmp);
     ori_2.id = ori_1.from.clone();
@@ -1568,7 +1567,7 @@ pub mod test {
     assert_eq!(compare_striple(&ori_1,&redec1), true);
     let redec1bis : StripleRef<TestKind1> = striple_dser(&encori_1, None, typednone,ref_builder_id).unwrap();
     let (encori_ref_1_bis,oc3) = redec1bis.striple_ser();
-    assert!(oc2.is_none());
+    assert!(oc3.is_none());
     assert_eq!(encori_1,encori_ref_1_bis);
   }
 
@@ -1620,9 +1619,9 @@ pub mod test {
     let mut cont_1 = Cursor::new(vec!(1,2,3,4));
     let mut cont_2 = Cursor::new(vec!());
     let sig_1 = S::sign_content(&kp1.1, &mut cont_1).unwrap();
-    cont_1.seek(SeekFrom::Start(0));
+    cont_1.seek(SeekFrom::Start(0)).unwrap();
     let sig_2 = S::sign_content(&kp2.1, &mut cont_2).unwrap();
-    cont_2.seek(SeekFrom::Start(0));
+    cont_2.seek(SeekFrom::Start(0)).unwrap();
 
     // public of keypair unique (because include in content)
     assert!(kp1.0 != kp2.0);
@@ -1632,18 +1631,18 @@ pub mod test {
  
     // check content does depend on from keypair (from must be added to content if hashing scheme)
     assert!(S::check_content(&kp1.0, &mut cont_1, &sig_1));
-    cont_1.seek(SeekFrom::Start(0));
+    cont_1.seek(SeekFrom::Start(0)).unwrap();
     assert!(!S::check_content(&vec!(1,2,3,4), &mut cont_1, &sig_1));
-    cont_1.seek(SeekFrom::Start(0));
+    cont_1.seek(SeekFrom::Start(0)).unwrap();
     // and sig validate content
     assert!(!S::check_content(&kp2.0, &mut cont_2, &vec!()));
-    cont_2.seek(SeekFrom::Start(0));
+    cont_2.seek(SeekFrom::Start(0)).unwrap();
 
     // signing do not have salt (uniqueness by keypair pub in content).
     assert!(S::sign_content(&kp1.1, &mut cont_1).unwrap() == sig_1);
-    cont_1.seek(SeekFrom::Start(0));
+    cont_1.seek(SeekFrom::Start(0)).unwrap();
     assert!(S::sign_content(&kp2.1, &mut cont_2).unwrap() == sig_2);
-    cont_1.seek(SeekFrom::Start(0));
+    cont_1.seek(SeekFrom::Start(0)).unwrap();
 
   }
 
@@ -1653,9 +1652,9 @@ pub mod test {
     let mut cont_1 = Cursor::new(vec!(1,2,3,4));
     let mut cont_2 = Cursor::new(vec!(1,2,3,4,5));
     let sig_1 = S::sign_content(&kp1.1, &mut cont_1).unwrap();
-    cont_1.seek(SeekFrom::Start(0));
+    cont_1.seek(SeekFrom::Start(0)).unwrap();
     let sig_2 = S::sign_content(&kp2.1, &mut cont_2).unwrap();
-    cont_2.seek(SeekFrom::Start(0));
+    cont_2.seek(SeekFrom::Start(0)).unwrap();
 
     // keypair unique
     assert!(kp1.0 != kp2.0);
@@ -1665,9 +1664,9 @@ pub mod test {
 
     // signature never empty
     assert!(S::sign_content(&kp1.1[..], &mut cont_1).unwrap() != &vec!()[..]);
-    cont_1.seek(SeekFrom::Start(0));
+    cont_1.seek(SeekFrom::Start(0)).unwrap();
     assert!(S::sign_content(&kp2.1[..], &mut cont_1).unwrap() != &vec!()[..]);
-    cont_1.seek(SeekFrom::Start(0));
+    cont_1.seek(SeekFrom::Start(0)).unwrap();
 
     // signing must have salt : no since different public key in content
     // assert!(S::sign_content(&kp1.1[..], cont_1) != sig_1);
@@ -1675,11 +1674,11 @@ pub mod test {
 
     // check content only when finely signed
     assert!(!S::check_content(&kp1.0[..], &mut cont_1, &vec!(4)[..]));
-    cont_1.seek(SeekFrom::Start(0));
+    cont_1.seek(SeekFrom::Start(0)).unwrap();
     assert!(S::check_content(&kp1.0[..], &mut cont_1, &sig_1[..]));
-    cont_1.seek(SeekFrom::Start(0));
+    cont_1.seek(SeekFrom::Start(0)).unwrap();
     assert!(S::check_content(&kp2.0[..], &mut cont_2, &sig_2[..]));
-    cont_2.seek(SeekFrom::Start(0));
+    cont_2.seek(SeekFrom::Start(0)).unwrap();
   }
 
   // test for chaning integrity, construct a K1 root then K1 and K2 son then for K2 K1 and K2 son.
@@ -1853,10 +1852,13 @@ pub mod test {
   pub fn compare_striple<K1 : StripleKind, K2 : StripleKind> (st1 : &Striple<K1>, st2 : &Striple<K2>) -> bool {
     let cmpcont = if st1.content.is_some() && st2.content.is_some() {
       compare_bcont(st1.content.as_ref().unwrap(),st2.content.as_ref().unwrap()).unwrap_or(false)
-    }else {
+    } else {
+    println!("st1 : {:?}, st2 : {:?}", st1.content, st2.content);
       st1.content.is_none() && st2.content.is_none()
     };
-    <K1 as StripleKind>::get_algo_key() == <K2 as StripleKind>::get_algo_key()
+    println!("CMPCONT {:?}",cmpcont);
+    cmpcont
+    && <K1 as StripleKind>::get_algo_key() == <K2 as StripleKind>::get_algo_key()
     && st1.contentenc == st2.contentenc
     && st1.id == st2.id
     && st1.from == st2.from
@@ -1935,8 +1937,7 @@ impl<'a,  S : StripleIf> Display for StripleDisp<'a, S> {
 #[inline]
 fn truncated_content<'a> ( ocont : &Option<BCont<'a>>)-> Vec<u8> {
   ocont.as_ref().map_or(vec!(),|cont|{
-  let mut r = cont.get_readable().unwrap();
-  match r {
+    match cont.get_readable().unwrap() {
       BContRead::Bytes(mut b) => {
         let r = &mut [0; 300];
         let i = b.read(r).unwrap();
@@ -1947,7 +1948,7 @@ fn truncated_content<'a> ( ocont : &Option<BCont<'a>>)-> Vec<u8> {
         let i = p.read(r).unwrap();
         r[0..i].to_vec()
       },
-  }
+    }
   })
 
 }

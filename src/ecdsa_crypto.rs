@@ -13,6 +13,7 @@ use self::crypto::ripemd160::Ripemd160;
 use self::crypto::ed25519;
 use stripledata;
 use self::rand::Rng;
+#[cfg(test)]
 use self::rand::thread_rng;
 use self::rand::os::OsRng;
 use std::io::Read;
@@ -26,6 +27,7 @@ use public::public_crypto::PubRipemd;
 use striple::test::{test_striple_kind,chaining_test};
 
 /// Key derivation using SHA-512
+#[allow(dead_code)]
 pub struct RIPEMD160KD;
 
 /// key is same as signature (case where signature does not need to be serialize)
@@ -165,6 +167,7 @@ fn sec_random_bytes(size : usize) -> Vec<u8> {
    bytes
 }
 
+#[cfg(test)]
 fn random_bytes(size : usize) -> Vec<u8> {
    let mut rng = rand::thread_rng();
    let mut bytes = vec![0; size];

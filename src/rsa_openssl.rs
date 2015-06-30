@@ -29,6 +29,7 @@ static HASH_SIGN : Type = Type::SHA512;
 static HASH_BYTE_SIZE : usize = 512 / 8;
 
 /// Key derivation using SHA-512
+#[allow(dead_code)]
 pub struct SHA512KD;
 
 /// key is same as signature (case where signature does not need to be serialize)

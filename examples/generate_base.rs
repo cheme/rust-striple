@@ -1,30 +1,33 @@
 //! Code used to initiate triples used by the lib (striple kind, root...).
 //! Both public and signed version are generated.
-#![feature(debug_builders)]
 extern crate striple;
 use std::fs::File;
 use std::io::Write;
-use std::io::Result as IoResult;
 use std::io::{Cursor,Read,Seek,SeekFrom};
 use striple::striple::Striple;
 use striple::striple::Error as StripleError;
-use striple::striple::{PubStriple,PublicScheme};
-use striple::striple::{StripleIf,StripleDisp};
-use striple::striple::{OwnedStripleIf,UnsafeOwnedStripleDisp};
+use striple::striple::{PublicScheme};
+use striple::striple::{StripleIf};
 use striple::striple::StripleKind;
+#[cfg(not(feature="public_openssl"))]
+#[cfg(not(feature="public_crypto"))]
+use striple::striple::NoKind;
+#[cfg(not(feature="opensslrsa"))]
+#[cfg(not(feature="cryptoecdsa"))]
 use striple::striple::NoKind;
 use striple::striple::BCont;
 use striple::striple::{xtendsize,xtendsizeread,read_id,push_id};
-use striple::stripledata;
 use striple::stripledata::{BaseStriples,KindStriples};
 use std::marker::PhantomData;
 use striple::storage::{FileMode,write_striple,NoCypher,StorageCypher};
+#[cfg(not(feature="public_openssl"))]
 #[cfg(feature="public_crypto")]
 use striple::striple_kind::public::crypto::PubRipemd;
 #[cfg(feature="public_openssl")]
 use striple::striple_kind::public::openssl::PubSha512;
 #[cfg(feature="opensslrsa")]
 use striple::striple_kind::Rsa2048Sha512;
+#[cfg(not(feature="opensslrsa"))]
 #[cfg(feature="cryptoecdsa")]
 use striple::striple_kind::EcdsaRipemd160;
 
@@ -63,10 +66,10 @@ fn main() {
   let cypher = NoCypher;
   datafile.write(&cypher.get_cypher_header()).unwrap();
   printlog(&pribase,&prikinds,&pubstriples);
-  let privateEnc = get_base_id(&prikinds);
-  println!("base : {:?}",privateEnc);
-  let publicEnc = get_kind_id(&prikinds);
-  println!("base : {:?}",publicEnc);
+  let private_enc = get_base_id(&prikinds);
+  println!("base : {:?}",private_enc);
+  let public_enc = get_kind_id(&prikinds);
+  println!("base : {:?}",public_enc);
 
 // Temporary code -------------------------
   /*TODO generate "bitcoin timestamped by ECH" from root, about public cat (should be some others)
@@ -119,39 +122,39 @@ fn main() {
   let cypher2 = NoCypher;
   let mut datafile2 = File::create("./timestamp.data").unwrap();
   datafile2.write(&cypher2.get_cypher_header()).unwrap();
-  write_striple_with_enc(&cypher2,&ts.0,None,&mut datafile2, &publicEnc).unwrap();
-  write_striple_with_enc(&cypher2,&personalts.0,Some(&personalts.1),&mut datafile2, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher2,&hashstamp.0,Some(&hashstamp.1),&mut datafile2, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher2,&hashstamp2.0,None,&mut datafile2, &publicEnc).unwrap();
+  write_striple_with_enc(&cypher2,&ts.0,None,&mut datafile2, &public_enc).unwrap();
+  write_striple_with_enc(&cypher2,&personalts.0,Some(&personalts.1),&mut datafile2, &private_enc).unwrap();
+  write_striple_with_enc(&cypher2,&hashstamp.0,Some(&hashstamp.1),&mut datafile2, &private_enc).unwrap();
+  write_striple_with_enc(&cypher2,&hashstamp2.0,None,&mut datafile2, &public_enc).unwrap();
   let cypher3 = RemoveKey;
    let mut datafile3 = File::create("./timestamp_nokey.data").unwrap();
   datafile3.write(&cypher3.get_cypher_header()).unwrap();
-  write_striple_with_enc(&cypher3,&ts.0,None,&mut datafile3, &publicEnc).unwrap();
-  write_striple_with_enc(&cypher3,&personalts.0,Some(&personalts.1),&mut datafile3, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher3,&hashstamp.0,Some(&hashstamp.1),&mut datafile3, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher3,&hashstamp2.0,None,&mut datafile3, &publicEnc).unwrap();
+  write_striple_with_enc(&cypher3,&ts.0,None,&mut datafile3, &public_enc).unwrap();
+  write_striple_with_enc(&cypher3,&personalts.0,Some(&personalts.1),&mut datafile3, &private_enc).unwrap();
+  write_striple_with_enc(&cypher3,&hashstamp.0,Some(&hashstamp.1),&mut datafile3, &private_enc).unwrap();
+  write_striple_with_enc(&cypher3,&hashstamp2.0,None,&mut datafile3, &public_enc).unwrap();
  
 */
 
 // End Temporary code ----------------
 
-  write_striple_with_enc(&cypher,&pribase.root.0,Some(&pribase.root.1),&mut datafile, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher,&pubcat,None,&mut datafile, &publicEnc).unwrap();
-  write_striple_with_enc(&cypher,&pubkind,None,&mut datafile, &publicEnc).unwrap();
-  write_striple_with_enc(&cypher,&pribase.libcat.0,Some(&pribase.libcat.1),&mut datafile, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher,&pribase.libkind.0,Some(&pribase.libkind.1),&mut datafile, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.kind.0,Some(&prikinds.kind.1),&mut datafile, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.pubripemd.0,Some(&prikinds.pubripemd.1),&mut datafile, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.pubsha512.0,Some(&prikinds.pubsha512.1),&mut datafile, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.pubsha256.0,Some(&prikinds.pubsha256.1),&mut datafile, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.rsa2048_sha512.0,Some(&prikinds.rsa2048_sha512.1),&mut datafile, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher,&prikinds.ecdsaripemd160.0,Some(&prikinds.ecdsaripemd160.1),&mut datafile, &privateEnc).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.kind,None,&mut datafile, &publicEnc).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.pubripemd,None,&mut datafile, &publicEnc).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.pubsha512,None,&mut datafile, &publicEnc).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.pubsha256,None,&mut datafile, &publicEnc).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.rsa2048_sha512,None,&mut datafile, &publicEnc).unwrap();
-  write_striple_with_enc(&cypher,&pubstriples.ecdsaripemd160,None,&mut datafile, &publicEnc).unwrap();
+  write_striple_with_enc(&cypher,&pribase.root.0,Some(&pribase.root.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubcat,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubkind,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pribase.libcat.0,Some(&pribase.libcat.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&pribase.libkind.0,Some(&pribase.libkind.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.kind.0,Some(&prikinds.kind.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.pubripemd.0,Some(&prikinds.pubripemd.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.pubsha512.0,Some(&prikinds.pubsha512.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.pubsha256.0,Some(&prikinds.pubsha256.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.rsa2048_sha512.0,Some(&prikinds.rsa2048_sha512.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.ecdsaripemd160.0,Some(&prikinds.ecdsaripemd160.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.kind,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.pubripemd,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.pubsha512,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.pubsha256,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.rsa2048_sha512,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.ecdsaripemd160,None,&mut datafile, &public_enc).unwrap();
 
 }
 
@@ -159,9 +162,9 @@ fn main() {
 fn printlog<K1 : StripleKind, K2 : StripleKind> (pribase : &BaseStriples<K1>, prikind : &KindStriples<K1>, pubstriples : &KindStriples<K2>) {
   // use base64
   let mut logfile = File::create("./base.log").unwrap();
-  write!(&mut logfile,"{}", pribase);
-  write!(&mut logfile,"{}", prikind);
-  write!(&mut logfile,"{}", pubstriples);
+  write!(&mut logfile,"{}", pribase).unwrap();
+  write!(&mut logfile,"{}", prikind).unwrap();
+  write!(&mut logfile,"{}", pubstriples).unwrap();
 
 }
 #[cfg(not(feature="serialize"))]
@@ -255,7 +258,7 @@ fn get_base_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
 
 
 fn gen_pri<K : StripleKind>(cat : Vec<u8>, kind : Vec<u8>) -> Result<(BaseStriples<K>,KindStriples<K>),StripleError> {
-  let ownedRoot : (Striple<K>, Vec<u8>) = try!(Striple::new(
+  let owned_root : (Striple<K>, Vec<u8>) = try!(Striple::new(
     // No meta (content encoding def)
     vec!(),
     // recursive from
@@ -267,26 +270,26 @@ fn gen_pri<K : StripleKind>(cat : Vec<u8>, kind : Vec<u8>) -> Result<(BaseStripl
     // Easilly identifiable content
     Some(BCont::OwnedBytes("ROOT".as_bytes().to_vec())),
     ));
-  let ownedCat : (Striple<K>, Vec<u8>) = try!(Striple::new(
+  let owned_cat : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
-    Some(&ownedRoot),
+    Some(&owned_root),
     // generic category
     Some(cat),
     vec!(),
     Some(BCont::OwnedBytes("Striple Lib Categories".as_bytes().to_vec())),
     ));
-  let ownedKind : (Striple<K>, Vec<u8>) = try!(Striple::new(
+  let owned_kind : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
-    Some(&ownedRoot),
+    Some(&owned_root),
     // generic kind
     Some(kind),
     vec!(),
     Some(BCont::OwnedBytes("Striple Lib Kind".as_bytes().to_vec())),
     ));
   let base = BaseStriples {
-    root : ownedRoot,
-    libcat : ownedCat,
-    libkind : ownedKind,
+    root : owned_root,
+    libcat : owned_cat,
+    libkind : owned_kind,
   };
   let kinds = try!(gen_kind(&base, "Striple Lib Verified Kind".to_string()));
 
@@ -296,7 +299,7 @@ fn gen_pri<K : StripleKind>(cat : Vec<u8>, kind : Vec<u8>) -> Result<(BaseStripl
 fn gen_kind<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel : String) -> Result<KindStriples<K>,StripleError> {
 //fn gen_kind<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel : String) -> Option<KindStriples<K>>  where K::S : PublicScheme {
 
- let ownedVKind : (Striple<K>, Vec<u8>) = try!(Striple::new(
+ let owned_vkind : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
     Some(&pri.root),
     Some(pri.libcat.0.get_about().to_vec()),
@@ -305,41 +308,41 @@ fn gen_kind<K : StripleKind, KF : StripleKind>(pri : &BaseStriples<KF>, catlabel
     ));
  let pubripem : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
-    Some(&ownedVKind),
+    Some(&owned_vkind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
     Some(BCont::OwnedBytes("Public Ripemd160 derivation".as_bytes().to_vec())),
     ));
  let pubsha512 : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
-    Some(&ownedVKind),
+    Some(&owned_vkind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
     Some(BCont::OwnedBytes("Public Sha512 derivation".as_bytes().to_vec())),
     ));
  let pubsha256 : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
-    Some(&ownedVKind),
+    Some(&owned_vkind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
     Some(BCont::OwnedBytes("Public Sha256 derivation".as_bytes().to_vec())),
     ));
  let rsa2048_sha512 : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
-    Some(&ownedVKind),
+    Some(&owned_vkind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
     Some(BCont::OwnedBytes("RSA 2048 Sha512 derivation".as_bytes().to_vec())),
     ));
  let ecdsaripemd160 : (Striple<K>, Vec<u8>) = try!(Striple::new(
     vec!(),
-    Some(&ownedVKind),
+    Some(&owned_vkind),
     Some(pri.libkind.0.get_about().to_vec()),
     vec!(),
     Some(BCont::OwnedBytes("ECDSA(ED25519) Ripemd160 derivation".as_bytes().to_vec())),
     ));
    Ok(KindStriples {
-     kind : ownedVKind,
+     kind : owned_vkind,
      pubripemd : pubripem,
      pubsha512 : pubsha512,
      pubsha256 : pubsha256,
@@ -359,7 +362,7 @@ pub fn write_striple_with_enc
  
 //  write_striple(cypher,striple,dest)
 
-  let mut tmpvec : Vec<u8> = Vec::new();
+  let tmpvec : Vec<u8> = Vec::new();
   let mut buf = &mut Cursor::new(tmpvec);
 
   try!(write_striple(cypher,striple,pkey,&FileMode::NoFile,buf));
@@ -367,7 +370,7 @@ pub fn write_striple_with_enc
 
   try!(buf.seek(SeekFrom::Start(0)));
   let tag = &mut [0];
-  buf.read(tag);
+  try!(buf.read(tag));
   try!(dest.write_all(tag));
   let privsize = try!(xtendsizeread(buf, 2));
   try!(dest.write_all(&xtendsize(privsize,2)));
