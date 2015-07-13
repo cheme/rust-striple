@@ -217,9 +217,9 @@ impl StorageCypher for Pbkdf2 {
   fn get_id_val (&self) -> usize { CIPHER_TAG_PBKDF2 }
   fn get_cypher_header (&self) -> Vec<u8> {
     let mut res = xtendsize(self.get_id_val(),CIPHTYPE_LENGTH);
-    res.push_all(&xtendsize(self.iter,PKITER_LENGTH)[..]);
-    res.push_all(&xtendsize(self.keylength,PKKS_LENGTH)[..]);
-    res.push_all(&self.salt[..]);
+    res.append(&mut xtendsize(self.iter,PKITER_LENGTH));
+    res.append(&mut xtendsize(self.keylength,PKKS_LENGTH));
+    res.append(&mut self.salt.to_vec());
     res
   }
   fn encrypt (&self, pk : &[u8]) -> Vec<u8> {
@@ -230,8 +230,8 @@ impl StorageCypher for Pbkdf2 {
  
     self.crypter.init(Mode::Encrypt,&self.key[..],iv.clone());
     let mut result = iv;
-    result.push_all(&self.crypter.update(pk));
-    result.push_all(&self.crypter.finalize());
+    result.append(&mut self.crypter.update(pk));
+    result.append(&mut self.crypter.finalize());
     result
   }
   // TODO no way of knowing if decrypt fail until trying to sign
@@ -242,7 +242,7 @@ impl StorageCypher for Pbkdf2 {
     let enc = &pk[self.keylength..];
     self.crypter.init(Mode::Decrypt,&self.key[..],iv.to_vec());
     let mut result = self.crypter.update(enc);
-    result.push_all(&self.crypter.finalize());
+    result.append(&mut self.crypter.finalize());
     result
   }
 }
@@ -776,19 +776,19 @@ pub fn recode_entry<C1 : StorageCypher, C2 : StorageCypher> (entrybytes : &[u8],
 
   let mut bufpri = vec![0;privsize];
   try!(entry.read(&mut bufpri[..]));
-  let newpriv = to.encrypt(&from.decrypt(&bufpri[..]));
-  let newprivsize = xtendsize(newpriv.len(), STORAGEPK_LENGTH);
+  let mut newpriv = to.encrypt(&from.decrypt(&bufpri[..]));
+  let mut newprivsize = xtendsize(newpriv.len(), STORAGEPK_LENGTH);
 
   let mut result = Vec::new();
   match head {
     None => result.push(STRIPLE_TAG_BYTE),
     Some(s) => {
       result.push(STRIPLE_TAG_BYTE);
-      result.push_all(&xtendsize(s,STORAGEPATH_LENGTH)[..]);
+      result.append(&mut xtendsize(s,STORAGEPATH_LENGTH));
     },
   }
-  result.push_all(&newprivsize[..]);
-  result.push_all(&newpriv[..]);
+  result.append(&mut newprivsize);
+  result.append(&mut newpriv);
   try!(entry.read_to_end(&mut result));
 
   Ok(result) 

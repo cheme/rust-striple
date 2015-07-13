@@ -413,11 +413,11 @@ macro_rules! ser_content(() => (
     }
 
     tmplen = self.key.len();
-    res.push_all(&xtendsize(tmplen,KEY_LENGTH));
-    res.push_all(&self.key);
+    res.append(&mut xtendsize(tmplen,KEY_LENGTH));
+    res.append(&mut self.key.to_vec());
     
     tmplen = self.contentids.len();
-    res.push_all(&xtendsize(tmplen,CONTENTIDS_LENGTH));
+    res.append(&mut xtendsize(tmplen,CONTENTIDS_LENGTH));
     for cid in self.contentids.iter(){
       push_id(res, &cid)
     };
@@ -437,8 +437,8 @@ macro_rules! ser_content(() => (
         (None,None)
       },
     };
-    res.push_all(&xtendsize(tmplen,CONTENT_LENGTH));
-    con.map(|c|res.push_all(&c));
+    res.append(&mut xtendsize(tmplen,CONTENT_LENGTH));
+    con.map(|c|res.append(&mut c.to_vec()));
     ocon
   }
 )
@@ -555,8 +555,8 @@ impl<T : StripleKind> StripleIf for Striple<T> {
     push_id(&mut res, &self.from);
 
     tmplen = self.sig.len();
-    res.push_all(&xtendsize(tmplen,SIG_LENGTH));
-    res.push_all(&self.sig);
+    res.append(&mut xtendsize(tmplen,SIG_LENGTH));
+    res.append(&mut self.sig.to_vec());
 
     let ocon = self.ser_tosig(&mut res);
 
@@ -632,8 +632,8 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
     push_id(&mut res, self.from);
 
     tmplen = self.sig.len();
-    res.push_all(&xtendsize(tmplen,SIG_LENGTH));
-    res.push_all(self.sig);
+    res.append(&mut xtendsize(tmplen,SIG_LENGTH));
+    res.append(&mut self.sig.to_vec());
 
     let ocon = self.ser_tosig(&mut res);
 
@@ -973,8 +973,8 @@ impl<T : StripleKind> Encodable for Striple<T> {
     match ocon {
       Some(bcon) => {
         match bcon.get_byte() {
-          Ok(vcon) => {
-            v.push_all(&vcon[..]);
+          Ok(mut vcon) => {
+            v.append(&mut vcon);
             v.encode(s)
           },
           Err(_) => {
@@ -1078,8 +1078,10 @@ pub fn xtendsize(l : usize, nbbyte : usize) -> Vec<u8> {
     };
  
       debug!("DEBUG {:?} !!!",v);
+      for i in 8 - nbbytes .. 8 {
+        res.push(v[i]);
+      }
 
-      res.push_all(&v[8 - nbbytes .. 8]);
   };
 
   res
@@ -1140,7 +1142,9 @@ pub fn xtendsizeread<R : Read>(r : &mut R, nbbyte : usize) -> IOResult<usize> {
     let addbytes = (buf[0] ^ 128).to_usize().unwrap();
     adj_ix +=1;
     // TODO test with reserve_exact
-    buf.push_all(&vec![0; 1 + addbytes]);
+    for _ in 0 .. 1 + addbytes {
+      buf.push(0);
+    }
     let nbread = try!(r.read(&mut buf[ nbbytes..]));
     if nbread != 1 + addbytes {
       // TODO switch to errror and rewrite test
@@ -1253,8 +1257,8 @@ fn test_readwriteid () {
 pub fn push_id(res : &mut Vec<u8>, content : &[u8]) {
     let tmplen = content.len();
     // TODO switch to 2 byte?? (see standard evo)
-    res.push_all(&xtendsize(tmplen,ID_LENGTH));
-    res.push_all(content);
+    res.append(&mut xtendsize(tmplen,ID_LENGTH));
+    res.append(&mut content.to_vec());
 }
 
 #[inline]
