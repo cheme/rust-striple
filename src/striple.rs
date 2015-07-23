@@ -548,7 +548,7 @@ impl<T : StripleKind> StripleIf for Striple<T> {
 
   fn striple_ser<'a> (&'a self) -> (Vec<u8>,Option<&'a BCont<'a>>) {
     let mut res = Vec::new();
-    let mut tmplen;
+    let tmplen;
     push_id(&mut res, <T as StripleKind>::get_algo_key());
     push_id(&mut res, &self.contentenc);
     push_id(&mut res, &self.id);
@@ -625,7 +625,7 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
 
   fn striple_ser<'b> (&'b self) -> (Vec<u8>,Option<&'b BCont<'b>>) {
     let mut res = Vec::new();
-    let mut tmplen;
+    let tmplen;
     push_id(&mut res, <T as StripleKind>::get_algo_key());
     push_id(&mut res, self.contentenc);
     push_id(&mut res, self.id);
