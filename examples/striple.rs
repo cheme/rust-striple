@@ -15,7 +15,6 @@
 
 #![feature(plugin)]
 #![plugin(docopt_macros)]
-#![feature(vec_push_all)]
 extern crate docopt;
 
 extern crate striple;
@@ -350,7 +349,7 @@ fn run() {
      match &sser.1 {
        &Some(ref bcon)=> {
          // TODO buff the out (just complete to be multiple of (see base64 padding)
-         sser.0.push_all(&bcon.get_byte().unwrap()[..]);
+         sser.0.extend_from_slice(&bcon.get_byte().unwrap()[..]);
        },
        &None => (),
      };

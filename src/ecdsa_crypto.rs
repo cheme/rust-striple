@@ -13,8 +13,6 @@ use self::crypto::ripemd160::Ripemd160;
 use self::crypto::ed25519;
 use stripledata;
 use self::rand::Rng;
-#[cfg(test)]
-use self::rand::thread_rng;
 use self::rand::os::OsRng;
 use std::io::Read;
 use std::io::Cursor;

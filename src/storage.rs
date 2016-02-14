@@ -330,7 +330,7 @@ fn writebcontheader(cont : &[u8], fm : &FileMode, dest : &mut Write) -> Result<b
           let relpath = try!(writetorandfile(cont,dest));
           let cur = try!(env::current_dir());
           let path = cur.join(relpath);
-          let pathb = path.as_os_str().to_bytes().unwrap();
+          let pathb = path.to_str().unwrap().as_bytes();
           try!(dest.write(&[STRIPLE_TAG_FILE]));
           try!(dest.write(&xtendsize(pathb.len(),STORAGEPATH_LENGTH)));
           try!(dest.write(&pathb));
@@ -357,7 +357,7 @@ fn writelocalpathheader(path : &PathBuf, fm : &FileMode, dest : &mut Write) -> R
   match fm {
     &FileMode::Idem => {
         try!(dest.write(&[STRIPLE_TAG_FILE]));
-        let pathb = path.as_os_str().to_bytes().unwrap();
+        let pathb = path.to_str().unwrap().as_bytes();
         try!(dest.write(&xtendsize(pathb.len(),STORAGEPATH_LENGTH)));
         try!(dest.write(pathb));
         Ok(false)
@@ -370,12 +370,12 @@ fn writelocalpathheader(path : &PathBuf, fm : &FileMode, dest : &mut Write) -> R
       try!(dest.write(&[STRIPLE_TAG_FILE]));
       let cur = try!(env::current_dir());
       let pathb = if path.is_relative() {
-        path.as_os_str().to_bytes().unwrap()
+        path.to_str().unwrap().as_bytes()
       } else {
         // TODO wait for #23284 resolution to get an allcase working fn without panic
-        match path.relative_from(&cur) {
-          Some(p) => p.as_os_str().to_bytes().unwrap().clone(),
-          None => panic!("Trying to make relative file to non child directory see #23284")
+        match path.strip_prefix(&cur) {
+          Ok(p) => p.to_str().unwrap().as_bytes(),
+          Err(e) => panic!("Trying to make relative file to non child directory : {}", e)
         }
       };
       try!(dest.write(&xtendsize(pathb.len(),STORAGEPATH_LENGTH)));
@@ -385,13 +385,13 @@ fn writelocalpathheader(path : &PathBuf, fm : &FileMode, dest : &mut Write) -> R
     &FileMode::Absolute(_) => {
       try!(dest.write(&[STRIPLE_TAG_FILE]));
       if path.is_absolute() {
-        let pathb = path.as_os_str().to_bytes().unwrap();
+        let pathb = path.to_str().unwrap().as_bytes();
         try!(dest.write(&xtendsize(pathb.len(),STORAGEPATH_LENGTH)));
         try!(dest.write(pathb));
       } else {
         let cur = try!(env::current_dir());
         let pathtmp = cur.join(path);
-        let pathb = pathtmp.as_os_str().to_bytes().unwrap();
+        let pathb = pathtmp.to_str().unwrap().as_bytes();
         try!(dest.write(&xtendsize(pathb.len(),STORAGEPATH_LENGTH)));
         try!(dest.write(pathb));
       };

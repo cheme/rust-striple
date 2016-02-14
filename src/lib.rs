@@ -10,11 +10,7 @@
 #![feature(no_std)]
 #![no_std]
 */
-#![feature(convert)] // for a recently add path to_bytes method TODO test without later
-#![feature(path_relative_from)] // for storage TODO remove when fix
 #![feature(ptr_as_ref)]
-#![feature(box_raw)]
-#![feature(append)]
 
 
 #[macro_use] extern crate lazy_static;

@@ -41,35 +41,35 @@ path = "examples/striple.rs"
 
 
 [dependencies]
-log = "0.3.1"
-lazy_static = "0.1.12"
-num = "0.1.25"
-rand = "0.3.8"
+log = "0.3.2"
+lazy_static = "0.1.15"
+num = "0.1.27"
+rand = "0.3.11"
 
 [dependencies.rustc-serialize]
-version = "0.3.15"
+version = "0.3.16"
 optional = true
 
 [dependencies.openssl]
-version = "0.6.4"
+version = "0.6.7"
 optional = true
 
 [dependencies.rust-crypto]
-version = "0.2.31"
+version = "0.2.33"
 optional = true
 
 [dependencies.uuid]
-version = "0.1.17"
+version = "0.1.18"
 optional = true
 
 [dependencies.libc]
-version = "0.1.8"
+version = "0.1.10"
 optional = true
 
 [dev-dependencies.docopt_macros]
-version = "0.6.67"
+version = "0.6.81"
 [dev-dependencies.docopt]
-version = "0.6.67"
+version = "0.6.78"
 
 [dev-dependencies.env_logger]
 version = "0.3.1"

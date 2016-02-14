@@ -38,7 +38,7 @@ pub struct either_owned {
 }
 
 
-type CIfIter = FileStripleIterator<NoKind,AnyStriple,File,AnyCyphers,fn(&[u8], StripleRef<NoKind>) -> Result<AnyStriple, Error> >;
+pub type CIfIter = FileStripleIterator<NoKind,AnyStriple,File,AnyCyphers,fn(&[u8], StripleRef<NoKind>) -> Result<AnyStriple, Error> >;
 
 // TODO find a way to get rid of this useless B (refact api?to trait param)
 //#[repr(C)]
@@ -163,7 +163,7 @@ pub unsafe extern "C" fn get_content(st : striple_ptr) -> striple_bcont {
       }
     },
     &BCont::LocalPath(ref path) => {
-      let b = path.as_os_str().to_bytes().unwrap();
+      let b = path.to_str().unwrap().as_bytes();
       let bb = Box::new(b);
       striple_bcont {
         bytes : transmute(&(*bb)),

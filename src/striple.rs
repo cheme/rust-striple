@@ -755,7 +755,7 @@ pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (byte
 
   let nbcids = xtendsizedec(bytes, &mut ix, CONTENTIDS_LENGTH);
   let mut contentids = Vec::new();
-  for _ in (0 .. nbcids) {
+  for _ in 0 .. nbcids {
     contentids.push(read_id (bytes, &mut ix));
   };
 
@@ -1186,7 +1186,7 @@ pub fn xtendsizeread_foralloc<R : Read>(r : &mut R, nbbyte : usize) -> Result<us
 // TODO precalc iteration in table
 fn calcnbbyte(val : usize) -> usize {
   let mut res = 0;
-  for i in (0 .. 8) {
+  for i in 0 .. 8 {
     if val < (num::pow(2,i*8) - 1)/2 {
       res = i;
       break;
