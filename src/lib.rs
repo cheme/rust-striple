@@ -6,11 +6,11 @@
 //! Several feature implements validation scheme (signature, verification and key derivation).
 //! Others add optional traits implementation such as serialize.
 //!
+
 /*
 #![feature(no_std)]
 #![no_std]
 */
-#![feature(ptr_as_ref)]
 
 
 #[macro_use] extern crate lazy_static;
@@ -22,6 +22,8 @@ extern crate rustc_serialize;
 
 #[cfg(feature="for_c")]
 extern crate libc;
+
+
 
 pub mod striple;
 pub mod anystriple;
@@ -63,5 +65,4 @@ pub mod striple_kind {
 
 #[cfg(feature="for_c")]
 pub mod for_c;
-
 

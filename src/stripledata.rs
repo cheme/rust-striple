@@ -19,7 +19,12 @@ use striple::{UnsafeOwnedStripleDisp};
 use std::fs::File;
 use storage::{FileStripleIterator,init_noread_key};
 use std::env;
-
+use std::result::Result as StdResult;
+use striple::{
+  Result,
+  from_option,
+  from_error,
+};
 #[cfg(feature="serialize")]
 use std::fmt::Result as FmtResult;
 #[cfg(feature="serialize")]
@@ -127,7 +132,7 @@ pub static ref PUBKIND : Option<KindStriples<NoKind>> = None;
 }
 
 lazy_static!{
-pub static ref KINDIDS : Option<KindStriplesIDs> = init_kind_striple_ids();
+pub static ref KINDIDS : Option<KindStriplesIDs> = init_kind_striple_ids().ok();
 }
 
 pub static PUBRIPEMKEY : &'static [u8] = &[73, 90, 215, 66, 44, 149, 161, 92, 107, 78, 148, 106, 215, 87, 129, 116, 62, 244, 33, 236, 84, 165, 176, 116, 86, 238, 126, 181, 94, 238, 82, 100, 110, 190, 109, 151, 252, 33, 98, 195, 27, 70, 152, 140, 215, 64, 117, 233, 157, 106, 181, 231, 226, 0, 34, 102, 120, 171, 235, 157, 121, 114, 207, 98];
@@ -147,37 +152,26 @@ pub fn init_kind_striple<SK : StripleKind> () -> Option<KindStriples<SK>> {
 
 
 /// init base striple from file in env var
-pub fn init_kind_striple_ids () -> Option<KindStriplesIDs> {
+pub fn init_kind_striple_ids () -> Result<KindStriplesIDs> {
 
-  env::var("STRIPLE_BASE").ok().and_then(|path| match File::open(&path) {
-    Ok(datafile) => {
-      // get striple without key and without Kind (as we define it)
-      let rit : Result<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>,_> = FileStripleIterator::init(datafile, ref_builder_id_copy , &init_noread_key, ());
-      let res = rit.and_then(|mut it|{
-        for _ in 0..6 {
-          try!(it.skip_striple());
-        };
-        let pubripemd = it.next().unwrap().0.get_id().to_vec();
-        let pubsha512 = it.next().unwrap().0.get_id().to_vec();
-        let pubsha256 = it.next().unwrap().0.get_id().to_vec();
-        let rsa2048_sha512 = it.next().unwrap().0.get_id().to_vec();
-        let ecdsaripemd160 = it.next().unwrap().0.get_id().to_vec();
-
-      Ok( KindStriplesIDs {
-         pubripemd : pubripemd,
-         pubsha512 : pubsha512,
-         pubsha256 : pubsha256,
-         rsa2048_sha512 : rsa2048_sha512,
-         ecdsaripemd160 : ecdsaripemd160,
-      })
-      });
-      res.ok()
-    },
-    Err(_) => {
-      error!("File not available when loading env var STRIPLE_BASE file : {}", path);
-      println!("File not available when loading env var STRIPLE_BASE file : {}", path);
-      // TODO should we panic??
-      None
-    },
+  let path = from_error(env::var("STRIPLE_BASE"))?;
+  let datafile = from_error(File::open(path))?;
+  // get striple without key and without Kind (as we define it)
+  let rit : StdResult<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>,_> = FileStripleIterator::init(datafile, ref_builder_id_copy , &init_noread_key, ());
+  let mut it = rit?;
+  for _ in 0..6 {
+    it.skip_striple()?;
+  };
+  let pubripemd = from_option(it.next())?.0.get_id().to_vec();
+  let pubsha512 = from_option(it.next())?.0.get_id().to_vec();
+  let pubsha256 = from_option(it.next())?.0.get_id().to_vec();
+  let rsa2048_sha512 = from_option(it.next())?.0.get_id().to_vec();
+  let ecdsaripemd160 = from_option(it.next())?.0.get_id().to_vec();
+  Ok( KindStriplesIDs {
+    pubripemd : pubripemd,
+    pubsha512 : pubsha512,
+    pubsha256 : pubsha256,
+    rsa2048_sha512 : rsa2048_sha512,
+    ecdsaripemd160 : ecdsaripemd160,
   })
 }

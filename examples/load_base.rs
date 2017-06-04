@@ -83,7 +83,7 @@ fn writepkbdf2(striples : &Vec<(AnyStriple,Option<Vec<u8>>)>) {
   stdin.read_line(&mut pass).unwrap();
   // remove terminal \n
   pass.pop();
-  let pbk = Pbkdf2::new(pass,2000,None);
+  let pbk = Pbkdf2::new(pass,2000,None).unwrap();
   write_striple_file_ref(&pbk, &mut it, &FileMode::NoFile, &mut datafile).unwrap();
 
 }

@@ -8,11 +8,17 @@ use striple::SignatureScheme;
 use striple::IDDerivation;
 use striple::StripleKind;
 use striple::Error;
-use self::openssl::crypto::hash::{Hasher,Type};
-use self::openssl::crypto::pkey::{PKey};
+use striple::ErrorKind;
+use self::openssl::hash::{Hasher,MessageDigest,hash2};
+use self::openssl::pkey::{PKey};
+use self::openssl::rsa::{Rsa};
+use self::openssl::error::ErrorStack;
+use self::openssl::sign::{
+  Signer,
+  Verifier,
+};
 use std::io::Write;
 use std::io::Read;
-use std::io::Result as IoResult;
 use stripledata;
 
 #[cfg(test)]
@@ -24,9 +30,19 @@ use public::public_openssl::PubSha512;
 #[cfg(test)]
 use striple::test::{test_striple_kind,chaining_test};
 
-static RSA_SIZE : usize = 2048;
-static HASH_SIGN : Type = Type::SHA512;
+static RSA_SIZE : u32 = 2048;
+
 static HASH_BYTE_SIZE : usize = 512 / 8;
+
+
+impl From<ErrorStack> for Error {
+
+  #[inline]
+  fn from(e : ErrorStack) -> Error {
+    Error(e.to_string(), ErrorKind::IOError, Some(Box::new(e)))
+  }
+}
+
 
 /// Key derivation using SHA-512
 #[allow(dead_code)]
@@ -40,9 +56,7 @@ impl IDDerivation for SHA512KD {
     if sig.len() < 1 {
       Vec::new()
     } else {
-      let mut digest = Hasher::new(HASH_SIGN);
-      digest.write_all(sig).unwrap();
-      digest.finish()
+      hash2(MessageDigest::sha512(), sig).unwrap().to_vec() // TODO use result
     }
   }
 }
@@ -55,9 +69,9 @@ pub struct Rsa2048;
 impl SignatureScheme for Rsa2048 {
   /// hash of content and from key (pri)
   fn sign_content(pri : &[u8], cont : &mut Read) -> Result<Vec<u8>,Error> {
-    let mut pkey = PKey::new();
-    pkey.load_priv(pri);
-    let mut digest = Hasher::new(HASH_SIGN);
+    // TODO rsa in struct ??
+    let rsa = Rsa::private_key_from_der(pri).unwrap(); // missigng From de ErrorStatck for striple Error: TODO
+    let mut digest = Hasher::new(MessageDigest::sha512()).unwrap();
     let mut vbuff = vec!(0;HASH_BYTE_SIZE);
     let buff = &mut vbuff[..];
 
@@ -67,50 +81,59 @@ impl SignatureScheme for Rsa2048 {
          break
       };
       if end != HASH_BYTE_SIZE {
-       try!(digest.write(&buff[0 .. end]));
+        digest.update(&buff[0 .. end]).unwrap();
       } else {
-        try!(digest.write(buff));
+        digest.update(buff).unwrap();
       };
     };
 
     //digest.write_all(cont).unwrap();
-    let tosig = digest.finish();
+    let tosig = digest.finish().unwrap();
     //println!("TOSIG {:?} : {:?}",tosig.len(),tosig);
-    Ok(pkey.sign_with_hash(&tosig, HASH_SIGN))
+    // TODO might not need any more to hash beforehand !!!! TODO compare with java impl
+    let pk = PKey::from_rsa(rsa).unwrap();
+    let mut s = Signer::new(MessageDigest::sha512(),&pk).unwrap();
+    try!(s.write_all(&tosig));
+    Ok(s.finish().unwrap())
   }
 
   /// first parameter is public key, second is content and third is signature
   fn check_content(publ : &[u8], cont : &mut Read, sign : &[u8]) -> bool {
-    let mut pkey = PKey::new();
-    pkey.load_pub(publ);
 
-    let mut digest = Hasher::new(HASH_SIGN);
+    let rsa = Rsa::public_key_from_der(publ).unwrap(); // missigng From de ErrorStatck for striple Error: TODO
+    let mut digest = Hasher::new(MessageDigest::sha512()).unwrap();
     let mut vbuff = vec!(0;HASH_BYTE_SIZE);
     let buff = &mut vbuff[..];
-    let res : IoResult<()> = (||{
+    {
     loop {
-      let end = try!(cont.read(buff));
+      let end = cont.read(buff).unwrap();
       if end == 0 {
         break
       };
       if end != HASH_BYTE_SIZE {
-        try!(digest.write(&buff[0 .. end]));
+        digest.write(&buff[0 .. end]).unwrap();
       } else {
-        try!(digest.write(buff));
+        digest.write(buff).unwrap();
       };
     };
-    Ok(())
-    })();
-    res.map(|_| pkey.verify_with_hash(&digest.finish(), sign, HASH_SIGN)).unwrap_or(false)
+    }
+    let pk = PKey::from_rsa(rsa).unwrap();
+    let mut ver = Verifier::new(MessageDigest::sha512(), &pk).unwrap();
+
+    let tosig = digest.finish().unwrap();
+    ver.write_all(&tosig).unwrap();
+    ver.finish(sign).unwrap_or(false)
+
+    //res.map(|_| pkey.verify_with_hash(&digest.finish(), sign, MessageDigest::sha512())).unwrap_or(false)
   }
 
   /// create keypair (first is public, second is private)
   fn new_keypair() -> (Vec<u8>, Vec<u8>) {
-    let mut pkey = PKey::new();
-    pkey.gen(RSA_SIZE);
+    // TODO store rsa directly!!!??
+    let pkey = Rsa::generate(RSA_SIZE).unwrap();
 
-    let private = pkey.save_priv();
-    let public  = pkey.save_pub();
+    let private = pkey.private_key_to_der().unwrap();
+    let public  = pkey.public_key_to_der().unwrap();
 
     (public, private)
   }

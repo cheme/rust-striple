@@ -24,11 +24,11 @@ use std::ptr;
 use std::slice;
 
 #[repr(C)]
-pub type striple_ptr = *const AnyStriple;
+pub struct striple_ptr (*const AnyStriple);
 //pub type striple_ptr = *const StripleIf;
 
 #[repr(C)]
-pub type owned_striple_ptr = *const (AnyStriple, Vec<u8>);
+pub struct owned_striple_ptr (*const (AnyStriple, Vec<u8>));
 //pub type owned_striple_ptr = *const OwnedStripleIf;
 
 #[repr(C)]
@@ -44,7 +44,7 @@ pub type CIfIter = FileStripleIterator<NoKind,AnyStriple,File,AnyCyphers,fn(&[u8
 //#[repr(C)]
 //pub struct striple_iter (*mut FileStripleIterator<NoKind,AnyStriple,File,AnyCyphers,fn(&[u8], StripleRef<NoKind>) -> Result<AnyStriple, Error> >);
 #[repr(C)]
-pub type striple_iter = *mut CIfIter;
+pub struct striple_iter (*mut CIfIter);
 
 //fn(&[u8], StripleRef<'_, NoKind>) -> Result<AnyStriple, Error> {copy_builder_any}
 #[repr(C)]
@@ -68,15 +68,15 @@ pub struct striple_bcont {
 
 #[no_mangle]
 pub unsafe extern "C" fn free_iter(st : striple_iter) {
-  drop(st)
+  drop(st.0)
 }
 #[no_mangle]
 pub unsafe extern "C" fn free_striple(st : striple_ptr) {
-  drop(st)
+  drop(st.0)
 }
 #[no_mangle]
 pub unsafe extern "C" fn free_owned_striple(st : owned_striple_ptr) {
-  drop(st)
+  drop(st.0)
 }
 #[no_mangle]
 pub unsafe extern "C" fn free_sba(st : striple_bytes_array) {
@@ -94,7 +94,7 @@ pub unsafe extern "C" fn free_bcont(st : striple_bcont) {
 
 #[no_mangle]
 pub unsafe extern "C" fn striple_check(st : striple_ptr, from : striple_ptr) -> bool {
-  let s : &AnyStriple = transmute(st);
+  let s : &AnyStriple = transmute(st.0);
   let f : &AnyStriple = transmute(from);
   //let s : &StripleIf = transmute(st);
   //let f : &StripleIf = transmute(from);
@@ -106,9 +106,9 @@ macro_rules! getter(($en:ident) => (
 #[no_mangle]
 pub unsafe extern "C" fn $en(st : striple_ptr) -> striple_bytes {
   //let s : &StripleIf = transmute(st);
-  let disp : *const () = transmute(st);
+  let disp : *const () = transmute(st.0);
   println!("get from : {:?}",disp);
-  let s : &AnyStriple = transmute(st); // Note that it is also somehow fine for (AnyStriple,Vec<u8>), but in most case we should convert owned striple to its striple (no polymorphism here).
+  let s : &AnyStriple = transmute(st.0); // Note that it is also somehow fine for (AnyStriple,Vec<u8>), but in most case we should convert owned striple to its striple (no polymorphism here).
   let b = s.$en();
   striple_bytes{
     bytes : transmute(b.as_ptr()),
@@ -131,7 +131,7 @@ getter!(get_sig);
 #[no_mangle]
 pub unsafe extern "C" fn private_key(st : owned_striple_ptr) -> striple_bytes {
   //let s : &OwnedStripleIf = transmute(st);
-  let s : &(AnyStriple, Vec<u8>) = transmute(st);
+  let s : &(AnyStriple, Vec<u8>) = transmute(st.0);
   let b = s.private_key_ref();
   striple_bytes {
     bytes : transmute(b.as_ptr()),
@@ -143,7 +143,7 @@ pub unsafe extern "C" fn private_key(st : owned_striple_ptr) -> striple_bytes {
 #[no_mangle]
 pub unsafe extern "C" fn get_content(st : striple_ptr) -> striple_bcont {
   //let s : &StripleIf = transmute(st);
-  let s : &AnyStriple = transmute(st);
+  let s : &AnyStriple = transmute(st.0);
   let os = s.get_content();
   os.as_ref().map(|s|
   match s {
@@ -211,9 +211,9 @@ pub unsafe extern "C" fn any_parse_striple(input : *mut u8, input_length : size_
     Ok(st) => {
       // not need heap allocate, maybe with a anystriple version ref ???
       let h = Box::new(st);
-      &(*h)
+      striple_ptr(&(*h))
     },
-    Err(_) => ptr::null(),
+    Err(_) => striple_ptr(ptr::null()),
   }
 }
 
@@ -247,7 +247,7 @@ pub unsafe extern "C" fn new_striple(
   let enc = Vec::from_raw_parts(contentenc, cenc_l as usize , cenc_l as usize);
   let rfrom : Option<&OwnedStripleIf> = match from {
     Some(ptr) => {
-      let ef : &(AnyStriple, Vec<u8>) = transmute(ptr);
+      let ef : &(AnyStriple, Vec<u8>) = transmute(ptr.0);
       Some(&(*ef))
     },
     None => None,
@@ -266,7 +266,7 @@ pub unsafe extern "C" fn new_striple(
     ).ok();
     match oany {
       Some(a) => {
-        Some(&a)
+        Some(owned_striple_ptr(&a))
       },
       None => None,
     }
@@ -315,7 +315,7 @@ pub unsafe extern "C" fn file_iter(cpath : *const c_char) -> striple_iter {
   iter_next(r);
   iter_next(r);
   println!("call now ok");*/
-  r
+  striple_iter(r)
 }
 #[no_mangle]
 pub unsafe extern "C" fn dispptr(iter : *const ())  {
@@ -325,8 +325,8 @@ pub unsafe extern "C" fn dispptr(iter : *const ())  {
   
 #[no_mangle]
 pub unsafe extern "C" fn iter_next(iter : striple_iter) -> *const either_owned {
-        println!("ptr st in next : {:?}", iter);
-  let iter : &mut CIfIter = transmute(iter);
+  println!("ptr st in next : {:?}", iter.0);
+  let iter : &mut CIfIter = transmute(iter.0);
   println!("bef match");
   match iter.next() {
     Some(v) => match v.1 {
@@ -334,8 +334,8 @@ pub unsafe extern "C" fn iter_next(iter : striple_iter) -> *const either_owned {
   println!("in some");
         let st = Box::new((v.0, vec!()));
         &(*Box::new(either_owned {
-          s : ptr::null(),
-          os : &(*st),
+          s : striple_ptr(ptr::null()),
+          os : owned_striple_ptr(&(*st)),
         }))
       },
       None => {
@@ -347,8 +347,8 @@ pub unsafe extern "C" fn iter_next(iter : striple_iter) -> *const either_owned {
         let disp : *const () = transmute(&(* st));
         println!("ret pt : {:?}",disp);
         &(*Box::new(either_owned {
-          s : ptr::null(),
-          os : &(*st),
+          s : striple_ptr(ptr::null()),
+          os : owned_striple_ptr(&(*st)),
         }))
  
         } else {
@@ -356,8 +356,8 @@ pub unsafe extern "C" fn iter_next(iter : striple_iter) -> *const either_owned {
           let disp : *const AnyStriple = transmute (&(*st));
           println!("debug ptr rust : {:?}",disp);
         &(*Box::new(either_owned {
-          s : &(*st),
-          os : ptr::null(),
+          s : striple_ptr(&(*st)),
+          os : owned_striple_ptr(ptr::null()),
         }))
         }
       },

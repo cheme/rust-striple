@@ -13,8 +13,8 @@
 //!  
 
 
-#![feature(plugin)]
-#![plugin(docopt_macros)]
+//#![feature(plugin)]
+//#![plugin(docopt_macros)]
 extern crate docopt;
 
 extern crate striple;
@@ -23,6 +23,8 @@ extern crate num;
 extern crate rustc_serialize;
 extern crate env_logger;
 
+use docopt::Docopt;
+use std::env::args;
 #[cfg(feature="serialize")]
 use rustc_serialize::base64::ToBase64;
 #[cfg(feature="serialize")]
@@ -44,8 +46,9 @@ use num::traits::ToPrimitive;
 use striple::storage::{write_striple_file,NoCypher,RemoveKey,init_any_cipher_stdin,init_any_cypher_with_pass,init_noread_key};
 
 
-#[cfg(feature="serialize")]
-docopt!(Args derive Debug, "
+//#[cfg(feature="serialize")]
+//docopt!(Args derive Debug, 
+const USAGE : &'static str = "
 Usage: 
 striple disp (-i <file> | - ) [--inpass <inpass>]  [-x <ix>]...
 striple id64 [from | about | content | kind | enc] (-i <file> | - ) [--inpass <inpass>] [-x <ix>]...
@@ -74,7 +77,7 @@ Options:
 --content <content>  Content as simple string, for byte content use stdin
 --contentid <contentid>  Base64 encoded contentid
 -V --version
-", flag_ix : Vec<usize>, flag_ox : usize, flag_conttreshold : usize);
+";//, flag_ix : Vec<usize>, flag_ox : usize, flag_conttreshold : usize);
 
 fn main() {
 
@@ -89,10 +92,66 @@ fn run() {
 //  println!("{:?}", args);
   println!("missing required features");
 }
+
+#[cfg(feature="serialize")]
+#[derive(RustcDecodable,Debug)]
+struct Args {
+  arg_fromfile : String,
+  arg_frompass : String,
+  arg_encid : String,
+  arg_encfile : String,
+  arg_kindid : String,
+  arg_kindfile : String,
+  arg_aboutid : String,
+  arg_aboutfile : String,
+  arg_contentfile : String,
+  flag_fromfile : bool,
+  flag_frompass : bool,
+  flag_contentid : Vec<String>,
+  flag_content : String,
+  flag_contentfile : bool,
+  flag_relative : bool,
+  flag_absolute : bool,
+  flag_nofile : bool,
+  flag_aboutid : bool,
+  flag_aboutfile : bool,
+  flag_in : String,
+  flag_out : String,
+  flag_inpass : String,
+  flag_outpass : String,
+  flag_encfile : bool,
+  flag_ix : Vec<usize>,
+  flag_ox : usize,
+  flag_encid : bool,
+  flag_cipher : String,
+  flag_kindid : bool,
+  cmd_create : bool,
+  cmd_disp : bool,
+  cmd_id64 : bool,
+  cmd_cp : bool,
+  cmd_rm : bool,
+  cmd_rewrite : bool,
+  cmd_check : bool,
+  cmd_from : bool,
+  cmd_about : bool,
+  cmd_content : bool,
+  cmd_kind : bool,
+  cmd_enc : bool,
+
+}
+ 
 #[cfg(feature="serialize")]
 fn run() {
-  let args: Args = Args::docopt().decode().unwrap_or_else(|e| e.exit());
-//  println!("{:?}", args);
+
+// Parse argv and exit the program with an error message if it fails.
+  let args : Args = Docopt::new(USAGE)
+                        .and_then(|d| d.argv(args().into_iter()).decode())
+                        .unwrap_or_else(|e| e.exit());
+   /* Docopt::new(USAGE)
+                  .and_then(|d| d.argv(args().into_iter()).parse())
+                  .unwrap_or_else(|e| e.exit());
+  let args: Args = Args::docopt().decode().unwrap_or_else(|e| e.exit());*/
+  println!("{:?}", args);
   if !args.cmd_create {
   let readseek = if args.flag_in.len() > 0 {
     File::open(&args.flag_in).unwrap()
@@ -345,7 +404,7 @@ fn run() {
    } else {
      // out on stdout as base64 : key then striple
      println!("{}", owned_striple.1.to_base64(BASE64CONF));
-     let mut sser = owned_striple.0.striple_ser();
+     let mut sser = owned_striple.0.striple_ser().unwrap();
      match &sser.1 {
        &Some(ref bcon)=> {
          // TODO buff the out (just complete to be multiple of (see base64 padding)
@@ -406,7 +465,7 @@ fn initpkbdf2 (outpass : String) -> Pbkdf2 {
         pass.pop();
         pass
         };
-        Pbkdf2::new(pass,2000,None)
+        Pbkdf2::new(pass,2000,None).unwrap()
 
 }
 

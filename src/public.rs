@@ -136,7 +136,7 @@ pub mod public_crypto {
 #[cfg(feature="public_openssl")]
 pub mod public_openssl {
   extern crate openssl;
-  use self::openssl::crypto::hash::{Hasher,Type};
+  use self::openssl::hash::{Hasher,MessageDigest};
   use std::io::Write;
   use std::io::Read;
   use std::io::Cursor;
@@ -147,26 +147,25 @@ pub mod public_openssl {
   use super::{PubSign,CHash};
 
  
-fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : Type) -> Vec<u8> {
+fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : MessageDigest, blen : usize) -> Vec<u8> {
   //println!("{:?}",buff1);
   let mut r = Cursor::new(buff1).chain(buff2);
-  let mut digest = Hasher::new(typ);
-  let bbytes = typ.md_len();
+  let mut digest = Hasher::new(typ).unwrap();
   //println!("bufflen {:?}", bbytes);
-  let mut vbuff = vec!(0;bbytes);
+  let mut vbuff = vec!(0;blen);
   let buff = &mut vbuff[..];
   loop {
     let end = r.read(buff).unwrap();
     if end == 0 {
       break
     };
-    if end != bbytes {
+    if end != blen {
      digest.write(&buff[0 .. end]).unwrap();
     } else {
       digest.write(buff).unwrap();
     };
   };
-  digest.finish()
+  digest.finish2().unwrap().to_vec()
 }
 
   #[derive(Debug,Clone)]
@@ -230,7 +229,7 @@ fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : Type) -> Vec<u8> {
 
   impl CHash for Ripemd {
     fn hash(buff1 : &[u8], buff2 : &mut Read) -> Vec<u8> {
-      hash_openssl(buff1, buff2, Type::RIPEMD160)
+      hash_openssl(buff1, buff2, MessageDigest::ripemd160(),Self::len()/8)
     }
     fn len() -> usize {
       160
@@ -238,7 +237,7 @@ fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : Type) -> Vec<u8> {
   }
   impl CHash for Sha512 {
     fn hash(buff1 : &[u8], buff2 : &mut Read) -> Vec<u8> {
-      hash_openssl(buff1, buff2, Type::SHA512)
+      hash_openssl(buff1, buff2, MessageDigest::sha512(),Self::len()/8)
     }
     fn len() -> usize {
       512
@@ -246,7 +245,7 @@ fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : Type) -> Vec<u8> {
   }
   impl CHash for Sha256 {
     fn hash(buff1 : &[u8], buff2 : &mut Read) -> Vec<u8> {
-      hash_openssl(buff1, buff2, Type::SHA256)
+      hash_openssl(buff1, buff2, MessageDigest::sha256(),Self::len()/8)
     }
     fn len() -> usize {
       256

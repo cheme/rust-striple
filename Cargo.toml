@@ -19,7 +19,7 @@ crate-type = ["rlib", "dylib"]
 #default = ["public_crypto","public_openssl","cryptoecdsa","opensslrsa","opensslpbkdf2"]
 default = ["public_crypto","serialize","public_openssl","cryptoecdsa","opensslrsa","opensslpbkdf2","for_c"]
 #default = []
-serialize = ["rustc-serialize"]
+serialize = ["rustc-serialize","serde"]
 opensslrsa = ["openssl"]
 opensslpbkdf2 = ["openssl"]
 cryptoecdsa = ["rust-crypto"]
@@ -41,36 +41,41 @@ path = "examples/striple.rs"
 
 
 [dependencies]
-log = "0.3.2"
-lazy_static = "0.1.15"
-num = "0.1.27"
-rand = "0.3.11"
+log = "0.3.7"
+lazy_static = "0.2.8"
+num = "0.1.37"
+rand = "0.3.15"
 
 [dependencies.rustc-serialize]
-version = "0.3.16"
+version = "0.3.24"
+optional = true
+[dependencies.serde]
+version = "1.0.7"
 optional = true
 
+
 [dependencies.openssl]
-version = "0.6.7"
+version = "0.9.12"
 optional = true
 
 [dependencies.rust-crypto]
-version = "0.2.33"
+version = "0.2.36"
 optional = true
 
 [dependencies.uuid]
-version = "0.1.18"
+version = "0.5.0"
 optional = true
+features = ["v4"]
 
 [dependencies.libc]
-version = "0.1.10"
+version = "0.2.23"
 optional = true
 
-[dev-dependencies.docopt_macros]
-version = "0.6.81"
+#[dev-dependencies.docopt_macros]
+#version = "0.7.0"
 [dev-dependencies.docopt]
-version = "0.6.78"
+version = "0.7.0"
 
 [dev-dependencies.env_logger]
-version = "0.3.1"
+version = "0.4.2"
 

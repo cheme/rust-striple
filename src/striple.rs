@@ -2,15 +2,16 @@
 
 use std::error::Error as ErrorTrait;
 use std::io::Error as IOError;
+use std::env::VarError;
 use std::fmt::{Display,Debug,Formatter};
 use std::fmt::Result as FmtResult;
 use std::marker::PhantomData;
 use num;
 use std::mem;
 use std::ptr::copy_nonoverlapping;
-use num::traits::{ToPrimitive};
 use std::io::{Read};
 use std::io::Result as IOResult;
+use std::result::Result as StdResult;
 use std::io::Cursor;
 use std::fs::File;
 use std::path::PathBuf;
@@ -35,6 +36,7 @@ use rustc_serialize::base64::ToBase64;
 use rustc_serialize::base64;
 
  
+pub type Result<R> = StdResult<R,Error>;
 /// Striple could be a standard struct, or references to contents from others struct
 /// Trait should not be implemented for other struct (or conformance with test case needed).
 /// Other struct should implement AsStriple (probably to stripleRef).
@@ -42,7 +44,7 @@ use rustc_serialize::base64;
 pub trait StripleIf : Debug {
 
   fn check_content(&self, cont : &mut Read, sig : &[u8]) -> bool;
-  fn sign_content(&self, _ : &[u8], _ : &mut Read) -> Result<Vec<u8>,Error>;
+  fn sign_content(&self, _ : &[u8], _ : &mut Read) -> Result<Vec<u8>>;
   fn derive_id(&self, sig : &[u8]) -> Vec<u8>;
   fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> bool;
   /// check striple integrity (signature and key)
@@ -53,16 +55,20 @@ pub trait StripleIf : Debug {
 
   /// check signature of striple
   fn check_sig (&self, from : &StripleIf) -> bool {
-    let (v, oc) = self.get_tosig();
-    let mut cv = Cursor::new(v);
-    from.get_id() == self.get_from() && match oc {
-      Some (bc) => {
-        match bc.get_readable() {
-          Ok(mut r) => from.check_content(&mut cv.chain(r.trait_read()), self.get_sig()),
-          Err(_) => false,
+    match self.get_tosig() {
+      Ok((v, oc)) => {
+        let mut cv = Cursor::new(v);
+        from.get_id() == self.get_from() && match oc {
+          Some (bc) => {
+            match bc.get_readable() {
+              Ok(mut r) => from.check_content(&mut cv.chain(r.trait_read()), self.get_sig()),
+              Err(_) => false,
+            }
+          },
+          None => from.check_content(&mut cv, self.get_sig()),
         }
       },
-      None => from.check_content(&mut cv, self.get_sig()),
+      Err(_) => false,
     }
   }
 
@@ -103,13 +109,13 @@ pub trait StripleIf : Debug {
   /// get bytes which must be signed
   /// TODO plus optional File or return Chain<Read> : that is better as we already copy mem -> use
   /// array of bcontread
-  fn get_tosig<'a>(&'a self) -> (Vec<u8>,Option<&'a BCont<'a>>);
+  fn get_tosig<'a>(&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)>;
 
   /// encode to bytes, but only striple content : Vec<u8> only include striple info.
   /// Might do others operation (like moving a file in a right container.
   /// If BCont is a Path, the path is written with a 2byte xtendsize before
   /// TODO ser with filename
-  fn striple_ser<'a> (&'a self) -> (Vec<u8>,Option<&'a BCont<'a>>);
+  fn striple_ser<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)>;
 
 }
 
@@ -135,22 +141,23 @@ impl<'a> BContRead<'a> {
 
 impl<'a> BCont<'a> {
   /// borrow object to a Read with position initialized to start
-  pub fn get_readable(&'a self) -> Result<BContRead<'a>, Error> {
+  pub fn get_readable(&'a self) -> Result<BContRead<'a>> {
     match self {
       &BCont::OwnedBytes(ref b) => Ok(BContRead::Bytes(Cursor::new(&b[..]))),
       &BCont::NotOwnedBytes(ref b) => Ok(BContRead::Bytes(Cursor::new(b))),
-      &BCont::LocalPath(ref p) => from_io_error(File::open(p).map(|f|BContRead::LocalPath(f))),
+      &BCont::LocalPath(ref p) => from_error(File::open(p).map(|f|BContRead::LocalPath(f))),
     }
   }
   /// check if for serialization (and also checking) we copy the content through `get_bytes` copy or include bcont
   /// Furtremore return length (included in both cases)
   #[inline]
-  pub fn copy_ser(&'a self) -> (bool, usize) {
+  pub fn copy_ser(&'a self) -> Result<(bool, usize)> {
     match self {
-      &BCont::OwnedBytes(ref b) => (b.len() < CONTENT_LENGTH_COPYTRESHOLD, b.len()),
-      &BCont::NotOwnedBytes(ref b) => (b.len() < CONTENT_LENGTH_COPYTRESHOLD, b.len()),
+      &BCont::OwnedBytes(ref b) => Ok((b.len() < CONTENT_LENGTH_COPYTRESHOLD, b.len())),
+      &BCont::NotOwnedBytes(ref b) => Ok((b.len() < CONTENT_LENGTH_COPYTRESHOLD, b.len())),
       &BCont::LocalPath(ref p) => {
-        (false, metadata(p).map(|m|m.len().to_usize().unwrap()).unwrap_or(0)) // TODO proper error management
+        let s = metadata(p)?.len() as usize;
+        Ok((false, s))
       },
     }
   }
@@ -158,7 +165,7 @@ impl<'a> BCont<'a> {
   /// borrow object to a Read with position initialized to start
   /// Warning this put all byte in memory this is very bad for File variant.
   /// TODO when Read use in deser see if delete this
-  pub fn get_byte(&self) -> Result<Vec<u8>, Error> {
+  pub fn get_byte(&self) -> Result<Vec<u8>> {
     match self {
       &BCont::OwnedBytes(ref b) => Ok(b.clone()),
       &BCont::NotOwnedBytes(ref b) => Ok(b.to_vec()),
@@ -251,7 +258,7 @@ impl IDDerivation for IdentityKD {
 pub trait SignatureScheme {
 
   /// first parameter is private key, second parameter is content
-  fn sign_content(pri : &[u8], cont : &mut Read) -> Result<Vec<u8>,Error>;
+  fn sign_content(pri : &[u8], cont : &mut Read) -> Result<Vec<u8>>;
 
 // TODO result in check (right now an error is seen as not checked)?
   /// first parameter is public key, second is content and third is signature
@@ -272,8 +279,8 @@ pub trait OwnedStripleIf : StripleIf {
   fn private_key_ref(&self) -> &[u8];
 
   /// first parameter is private key, second parameter is content
-  fn sign(&self, st : &StripleIf) -> Result<Vec<u8>, Error> {
-    let (v, obc) = st.get_tosig();
+  fn sign(&self, st : &StripleIf) -> Result<Vec<u8>> {
+    let (v, obc) = st.get_tosig()?;
     let mut cv = Cursor::new(v);
     match obc {
       Some (bc) => {
@@ -402,7 +409,7 @@ pub struct StripleRef<'a, T : StripleKind> {
 // identic code for stripleref and striple   
 macro_rules! ser_content(() => (
   #[inline]
-  fn ser_tosig<'b> (&'b self, res : &mut Vec<u8>) -> Option<&'b BCont<'b>> {
+  fn ser_tosig<'b> (&'b self, res : &mut Vec<u8>) -> Result<Option<&'b BCont<'b>>> {
     let mut tmplen;
 
     // never encode the same value for about and id
@@ -423,10 +430,10 @@ macro_rules! ser_content(() => (
     };
     let (con, ocon) = match self.content {
       Some(ref c) => {
-        let (ser, l) = c.copy_ser();
+        let (ser, l) = c.copy_ser()?;
         tmplen = l;
         if ser {
-          let b = c.get_byte().unwrap();
+          let b = c.get_byte()?;
           (Some(b),None)
         } else {
           (None,self.content.as_ref())
@@ -439,7 +446,7 @@ macro_rules! ser_content(() => (
     };
     res.append(&mut xtendsize(tmplen,CONTENT_LENGTH));
     con.map(|c|res.append(&mut c.to_vec()));
-    ocon
+    Ok(ocon)
   }
 )
 );
@@ -460,7 +467,7 @@ impl<T : StripleKind> Striple<T> {
     about: Option<Vec<u8>>,
     contentids : Vec<Vec<u8>>,
     content : Option<BCont<'static>>,
-  ) -> Result<(Striple<T>,Vec<u8>), Error> {
+  ) -> Result<(Striple<T>,Vec<u8>)> {
     let keypair = T::S::new_keypair();
     let mut res = Striple {
         contentenc : contentenc,
@@ -482,7 +489,7 @@ impl<T : StripleKind> Striple<T> {
         (sig, id)
       },
       None => {
-        let (v, obc) = res.get_tosig();
+        let (v, obc) = res.get_tosig()?;
         let mut cv = Cursor::new(v);
         let sig = match obc {
           Some (bc) => {
@@ -533,7 +540,7 @@ impl<T : StripleKind> StripleIf for Striple<T> {
     T::S::check_content(&self.key, cont, sig)
   }
   #[inline]
-  fn sign_content(&self, pri : &[u8], con : &mut Read) -> Result<Vec<u8>,Error> {
+  fn sign_content(&self, pri : &[u8], con : &mut Read) -> Result<Vec<u8>> {
     T::S::sign_content(pri, con)
   }
   #[inline]
@@ -546,7 +553,7 @@ impl<T : StripleKind> StripleIf for Striple<T> {
   }
  
 
-  fn striple_ser<'a> (&'a self) -> (Vec<u8>,Option<&'a BCont<'a>>) {
+  fn striple_ser<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
     let mut res = Vec::new();
     let tmplen;
     push_id(&mut res, <T as StripleKind>::get_algo_key());
@@ -558,9 +565,9 @@ impl<T : StripleKind> StripleIf for Striple<T> {
     res.append(&mut xtendsize(tmplen,SIG_LENGTH));
     res.append(&mut self.sig.to_vec());
 
-    let ocon = self.ser_tosig(&mut res);
+    let ocon = self.ser_tosig(&mut res)?;
 
-    (res,ocon)
+    Ok((res,ocon))
   }
  
   #[inline]
@@ -589,10 +596,10 @@ impl<T : StripleKind> StripleIf for Striple<T> {
   fn get_content_ids(&self) -> Vec<&[u8]> {
     self.contentids.iter().map(|r|&r[..]).collect()
   }
-  fn get_tosig<'a>(&'a self) -> (Vec<u8>,Option<&'a BCont<'a>>) {
+  fn get_tosig<'a>(&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
     let mut res = Vec::new();
-    let oc =  self.ser_tosig(&mut res);
-    (res, oc)
+    let oc =  self.ser_tosig(&mut res)?;
+    Ok((res, oc))
   }
 }
 
@@ -607,7 +614,7 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
     T::S::check_content(self.key, cont, sig)
   }
   #[inline]
-  fn sign_content(&self, pri : &[u8], con : &mut Read) -> Result<Vec<u8>,Error> {
+  fn sign_content(&self, pri : &[u8], con : &mut Read) -> Result<Vec<u8>> {
     T::S::sign_content(pri, con)
   }
   #[inline]
@@ -623,7 +630,7 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
 
 
 
-  fn striple_ser<'b> (&'b self) -> (Vec<u8>,Option<&'b BCont<'b>>) {
+  fn striple_ser<'b> (&'b self) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
     let mut res = Vec::new();
     let tmplen;
     push_id(&mut res, <T as StripleKind>::get_algo_key());
@@ -635,9 +642,9 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
     res.append(&mut xtendsize(tmplen,SIG_LENGTH));
     res.append(&mut self.sig.to_vec());
 
-    let ocon = self.ser_tosig(&mut res);
+    let ocon = self.ser_tosig(&mut res)?;
 
-    (res,ocon)
+    Ok((res,ocon))
   }
 
   #[inline]
@@ -665,29 +672,29 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
   #[inline]
   fn get_content_ids(&self) -> Vec<&[u8]> {self.contentids.clone()}
   #[inline]
-  fn get_tosig<'b>(&'b self) -> (Vec<u8>,Option<&'b BCont<'b>>) {
+  fn get_tosig<'b>(&'b self) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
     let mut res = Vec::new();
-    let oc = self.ser_tosig(&mut res);
-    (res, oc)
+    let oc = self.ser_tosig(&mut res)?;
+    Ok((res, oc))
   }
 }
 
 /// deserialize to reference striple without and kind resolution (cast to kind of required kind)
-pub fn ref_builder_id<'a,K : StripleKind>(algoid :&[u8], sr : StripleRef<'a,K>) -> Result<StripleRef<'a,K>, Error> {
+pub fn ref_builder_id<'a,K : StripleKind>(algoid :&[u8], sr : StripleRef<'a,K>) -> Result<StripleRef<'a,K>> {
   if algoid != K::get_algo_key() && K::get_algo_key() != NOKEY {
     return Err(Error("Bad algo kind for this type of striple".to_string(), ErrorKind::UnexpectedStriple, None))
   };
   Ok(sr)
 }
 /// deserialize to striple without and kind resolution (cast to kind of required kind)
-pub fn ref_builder_id_copy<'a,K : StripleKind>(algoid :&[u8], sr : StripleRef<'a,K>) -> Result<Striple<K>, Error> {
+pub fn ref_builder_id_copy<'a,K : StripleKind>(algoid :&[u8], sr : StripleRef<'a,K>) -> Result<Striple<K>> {
   if algoid != K::get_algo_key() && K::get_algo_key() != NOKEY {
     return Err(Error("Bad algo kind for this type of striple".to_string(), ErrorKind::UnexpectedStriple, None))
   };
   Ok(sr.as_striple())
 }
 /// deserialize to striple without and kind resolution (cast to kind of required kind)
-pub fn copy_builder_id<'a,K : StripleKind>(algoid :&[u8], sr : Striple<K>) -> Result<Striple<K>, Error> {
+pub fn copy_builder_id<'a,K : StripleKind>(algoid :&[u8], sr : Striple<K>) -> Result<Striple<K>> {
   if algoid != K::get_algo_key() && K::get_algo_key() != NOKEY {
     return Err(Error("Bad algo kind for this type of striple".to_string(), ErrorKind::UnexpectedStriple, None))
   };
@@ -697,8 +704,8 @@ pub fn copy_builder_id<'a,K : StripleKind>(algoid :&[u8], sr : Striple<K>) -> Re
 #[inline]
 /// dser without lifetime TODO redesign to interface on same as striple_dser : here useless as
 /// cannot cast in any triple without a copy
-pub fn striple_copy_dser<T : StripleIf, K : StripleKind, FS : StripleIf, B> (bytes : &[u8], obc : Option<BCont>, docheck : Option<&FS>, builder : B) -> Result<T, Error>
-  where B : Fn(&[u8], Striple<K>) -> Result<T, Error>
+pub fn striple_copy_dser<T : StripleIf, K : StripleKind, FS : StripleIf, B> (bytes : &[u8], obc : Option<BCont>, docheck : Option<&FS>, builder : B) -> Result<T>
+  where B : Fn(&[u8], Striple<K>) -> Result<T>
 {
   striple_dser(bytes, obc, docheck,
    |algoid, sref| {
@@ -717,8 +724,8 @@ pub fn striple_copy_dser<T : StripleIf, K : StripleKind, FS : StripleIf, B> (byt
 ///
 /// If optional BCont is used, we assume it is valid, a size check is done as it is not to costy.
 /// TODO optional BCon as param for deser + file size check??? !!!
-pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (bytes : &'a[u8], obc : Option<BCont<'a>>, docheck : Option<&FS>, ref_builder : B) -> Result<T, Error>
-  where B : Fn(&[u8], StripleRef<'a,K>) -> Result<T, Error>
+pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (bytes : &'a[u8], obc : Option<BCont<'a>>, docheck : Option<&FS>, ref_builder : B) -> Result<T>
+  where B : Fn(&[u8], StripleRef<'a,K>) -> Result<T>
 {
   let mut ix = 0;
   let algoenc = read_id (bytes, &mut ix);
@@ -789,13 +796,15 @@ pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (byte
     None => ()
   };
 
-  let content = if obc.is_some() {
+  let content = match obc {
+    Some (bc) => {
     // check size if no sign check
-    if docheck.is_none() && obc.as_ref().unwrap().copy_ser().1 != s {
+    if docheck.is_none() && bc.copy_ser()?.1 != s {
       return Err(Error("Mismatch size of linked content".to_string(), ErrorKind::DecodingError, None))
     };
-    obc
-  } else {
+    Some(bc)
+  },
+  None => {
     if s == 0 {
       None
     } else {
@@ -806,7 +815,7 @@ pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (byte
         return Err(Error("Mismatch size of content".to_string(), ErrorKind::DecodingError, None))
       }
     }
-  };
+  },};
   if ix != bytes.len() {
     debug!("strip or {:?} - {:?}", ix, bytes.len());
     return Err(Error("Mismatch size of striple".to_string(), ErrorKind::DecodingError, None))
@@ -850,7 +859,7 @@ impl<T : AsStripleIf + Debug> StripleIf for T {
     self.as_striple_if().check_content(cont,sig)
   }
   #[inline]
-  fn sign_content(&self, a : &[u8], b : &mut Read) -> Result<Vec<u8>,Error> {
+  fn sign_content(&self, a : &[u8], b : &mut Read) -> Result<Vec<u8>> {
     self.as_striple_if().sign_content(a,b)
   }
   #[inline]
@@ -898,11 +907,11 @@ impl<T : AsStripleIf + Debug> StripleIf for T {
     self.as_striple_if().get_sig()
   }
   #[inline]
-  fn get_tosig<'b>(&'b self) -> (Vec<u8>,Option<&'b BCont<'b>>) {
+  fn get_tosig<'b>(&'b self) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
     self.as_striple_if().get_tosig()
   }
   #[inline]
-  fn striple_ser<'b> (&'b self) -> (Vec<u8>,Option<&'b BCont<'b>>) {
+  fn striple_ser<'b> (&'b self) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
     self.as_striple_if().striple_ser()
   }
 
@@ -968,8 +977,12 @@ impl<'a, T : StripleKind> AsStriple<'a, T> for Striple<T> {
 /// Most of the time serialize is use on another struct (implementing `AsStriple` trait), this only represent the serialization of
 /// the byte form of an striple
 impl<T : StripleKind> Encodable for Striple<T> {
-  fn encode<S:Encoder> (&self, s: &mut S) -> Result<(), S::Error> {
-    let  (mut v, ocon) = self.striple_ser();
+  fn encode<S:Encoder> (&self, s: &mut S) -> StdResult<(), S::Error> {
+    let (mut v, ocon) = match self.striple_ser() {
+      Ok(a) => a,
+      Err(_) => 
+            panic!("cannot der striple"), // TODO see next panic
+    };
     match ocon {
       Some(bcon) => {
         match bcon.get_byte() {
@@ -978,7 +991,8 @@ impl<T : StripleKind> Encodable for Striple<T> {
             v.encode(s)
           },
           Err(_) => {
-            // TODO follow this https://github.com/rust-lang/rustc-serialize/issues/76
+            // TODO follow this https://github.com/rust-lang/rustc-serialize/issues/76 -> TODO
+            // switch to SERD
             // for now panic
             panic!("cannot add BCont when serializing")
           }
@@ -992,7 +1006,7 @@ impl<T : StripleKind> Encodable for Striple<T> {
 // TODO test on this (not good)
 #[cfg(feature="serialize")]
 impl<T : StripleKind> Decodable for Striple<T> {
-  fn decode<D:Decoder> (d : &mut D) -> Result<Striple<T>, D::Error> {
+  fn decode<D:Decoder> (d : &mut D) -> StdResult<Striple<T>, D::Error> {
     let tmpres = Vec::decode(d);
     // Dummy type
     let typednone : Option<&Striple<T>> = None;
@@ -1008,9 +1022,19 @@ impl<T : StripleKind> Decodable for Striple<T> {
 pub struct Error(pub String, pub ErrorKind, pub Option<Box<ErrorTrait>>);
 
 #[inline]
-pub fn from_io_error<T>(r : Result<T, IOError>) -> Result<T, Error> {
-  r.map_err(|e| From::from(e))
+pub fn from_error<T,E1 : Into<Error>>(r : StdResult<T, E1>) -> StdResult<T,Error>
+{
+  r.map_err(|e| e.into())
 }
+
+#[inline]
+pub fn from_option<T>(r : Option<T>) -> Result<T> {
+  match r {
+    Some(T) => Ok(T),
+    None => Err(Error("Unexpected None value".to_string(), ErrorKind::FromOption,None)),
+  }
+}
+
 
 
 impl ErrorTrait for Error {
@@ -1031,6 +1055,14 @@ impl From<IOError> for Error {
   #[inline]
   fn from(e : IOError) -> Error {
     Error(e.description().to_string(), ErrorKind::IOError, Some(Box::new(e)))
+  }
+}
+
+impl From<VarError> for Error {
+
+  #[inline]
+  fn from(e : VarError) -> Error {
+    Error(e.description().to_string(), ErrorKind::VarError, Some(Box::new(e)))
   }
 }
 
@@ -1064,7 +1096,7 @@ pub fn xtendsize(l : usize, nbbyte : usize) -> Vec<u8> {
     nbbytes = calcnbbyte(l);
       debug!("DEBUG {:?} !!!",nbbytes);
 
-    let wrnbbyte = ((nbbytes - nbbyte)).to_u8().unwrap() ^ 128;
+    let wrnbbyte = ((nbbytes - nbbyte)) as u8 ^ 128;
     // push last byte of wrnbbyte
     res.push (wrnbbyte);
   }
@@ -1101,7 +1133,7 @@ pub fn xtendsizedec(bytes : &[u8], ix : &mut usize, nbbyte : usize) -> usize {
   // read value
   while bytes[idx] > 127 {
     // first byte minus its first bit
-    adj_ix += (bytes[idx] ^ 128).to_usize().unwrap();
+    adj_ix += (bytes[idx] ^ 128) as usize;
     debug!("adjix {:?} !!!",adj_ix);
     nbbytes += adj_ix;
     idx += 1;
@@ -1139,7 +1171,7 @@ pub fn xtendsizeread<R : Read>(r : &mut R, nbbyte : usize) -> IOResult<usize> {
   // read value
   while buf[adj_ix] > 127 {
     // first byte minus its first bit
-    let addbytes = (buf[0] ^ 128).to_usize().unwrap();
+    let addbytes = (buf[0] ^ 128) as usize;
     adj_ix +=1;
     // TODO test with reserve_exact
     for _ in 0 .. 1 + addbytes {
@@ -1173,7 +1205,7 @@ pub fn xtendsizeread<R : Read>(r : &mut R, nbbyte : usize) -> IOResult<usize> {
 
 /// xtendsize with length control
 #[inline]
-pub fn xtendsizeread_foralloc<R : Read>(r : &mut R, nbbyte : usize) -> Result<usize,Error> {
+pub fn xtendsizeread_foralloc<R : Read>(r : &mut R, nbbyte : usize) -> StdResult<usize,Error> {
   let size = try!(xtendsizeread(r, nbbyte));
   if size < MAX_ALLOC_SIZE {
     Ok(size)
@@ -1283,6 +1315,8 @@ pub enum ErrorKind {
   KindImplementationNotFound,
   MissingFile,
   IOError,
+  VarError,
+  FromOption,
 }
 
 // feature related implementation of serialize (using standard ser meth of striple) : to avoid
@@ -1316,7 +1350,7 @@ impl IDDerivation for NoIDDer {
 
 }
 impl SignatureScheme for NoSigCh {
-  fn sign_content(_ : &[u8], _ : &mut Read) -> Result<Vec<u8>,Error> {
+  fn sign_content(_ : &[u8], _ : &mut Read) -> StdResult<Vec<u8>,Error> {
     Ok(vec!())
   }
   fn check_content(_ : &[u8],_ : &mut Read,_ : &[u8]) -> bool {
@@ -1333,7 +1367,7 @@ pub fn as_kind<'a, SK : StripleKind> (nk : &'a Striple<NoKind>) -> &'a Striple<S
   unsafe {
     let ptr = nk as *const Striple<NoKind>;
     let sptr : *const Striple<SK> = mem::transmute(ptr);
-    sptr.as_ref().unwrap()
+    &(*sptr)
   }
 }
 #[inline]
@@ -1342,7 +1376,7 @@ pub fn mut_as_kind<'a,  SK : StripleKind> (nk : &'a mut Striple<NoKind>) -> &'a 
   unsafe {
     let ptr = nk as *mut Striple<NoKind>;
     let sptr : *mut Striple<SK> = mem::transmute(ptr);
-    sptr.as_mut().unwrap()
+    &mut(*sptr)
   }
 }
 
@@ -1360,7 +1394,7 @@ pub fn ref_as_kind<'a, SK : StripleKind> (nk : &'a StripleRef<'a,NoKind>) -> &'a
   unsafe {
     let ptr = nk as *const StripleRef<'a,NoKind>;
     let sptr : *const StripleRef<'a,SK> = mem::transmute(ptr);
-    sptr.as_ref().unwrap()
+    &(*sptr)
   }
 }
 #[inline]
@@ -1369,7 +1403,7 @@ pub fn ref_mut_as_kind<'a,  SK : StripleKind> (nk : &'a mut StripleRef<'a, NoKin
   unsafe {
     let ptr = nk as *mut StripleRef<'a,NoKind>;
     let sptr : *mut StripleRef<'a,SK> = mem::transmute(ptr);
-    sptr.as_mut().unwrap()
+    &mut(*sptr)
   }
 }
 
@@ -1396,6 +1430,7 @@ pub mod test {
   use self::rand::Rng;
   use std::marker::PhantomData;
   use striple::Striple;
+  use striple::Result;
   use striple::striple_dser;
   use striple::striple_copy_dser;
   use striple::StripleRef;
@@ -1443,7 +1478,7 @@ pub mod test {
 
   }
   impl SignatureScheme for TestSigSchem1 {
-    fn sign_content(pri : &[u8], _ : &mut Read) -> Result<Vec<u8>,Error> {
+    fn sign_content(pri : &[u8], _ : &mut Read) -> Result<Vec<u8>> {
       // Dummy : just use pri
       Ok(pri.to_vec())
     }
@@ -1558,19 +1593,19 @@ pub mod test {
     ori_2.sig = ori_1.from.clone();
     let ori_ref_1 = ori_1.as_striple();
     // No file
-    let (encori_1, oc) = ori_1.striple_ser();
+    let (encori_1, oc) = ori_1.striple_ser().unwrap();
     assert!(oc.is_none());
     debug!("Encoded : \n{:?}",encori_1);
     let typednone : Option<&Striple<TestKind1>> = Some(&ori_2);
     let dec1 : Striple<TestKind1> = striple_dser(&encori_1, None, typednone,ref_builder_id_copy).unwrap();
     assert_eq!(compare_striple(&ori_1,&dec1), true);
-    let (encori_ref_1,oc2) = ori_ref_1.striple_ser();
+    let (encori_ref_1,oc2) = ori_ref_1.striple_ser().unwrap();
     assert!(oc2.is_none());
     assert_eq!(encori_1,encori_ref_1);
     let redec1 : Striple<TestKind1> = striple_copy_dser(&encori_1, None, typednone,copy_builder_id).unwrap();
     assert_eq!(compare_striple(&ori_1,&redec1), true);
     let redec1bis : StripleRef<TestKind1> = striple_dser(&encori_1, None, typednone,ref_builder_id).unwrap();
-    let (encori_ref_1_bis,oc3) = redec1bis.striple_ser();
+    let (encori_ref_1_bis,oc3) = redec1bis.striple_ser().unwrap();
     assert!(oc3.is_none());
     assert_eq!(encori_1,encori_ref_1_bis);
   }
@@ -1881,7 +1916,7 @@ pub mod test {
   }
 
 
-  pub fn compare_bcont (b1 : &BCont, b2 : &BCont) -> Result<bool, Error> {
+  pub fn compare_bcont (b1 : &BCont, b2 : &BCont) -> Result<bool> {
     let mut r1 = try!(b1.get_readable());
     let mut r2 = try!(b2.get_readable());
     let mut buff1 = [0;256];
@@ -1941,20 +1976,22 @@ impl<'a,  S : StripleIf> Display for StripleDisp<'a, S> {
 #[inline]
 fn truncated_content<'a> ( ocont : &Option<BCont<'a>>)-> Vec<u8> {
   ocont.as_ref().map_or(vec!(),|cont|{
-    match cont.get_readable().unwrap() {
-      BContRead::Bytes(mut b) => {
+    match cont.get_readable() {
+      Ok(BContRead::Bytes(mut b)) => {
         let r = &mut [0; 300];
-        let i = b.read(r).unwrap();
-        r[0..i].to_vec()
+        b.read(r).map(|i| r[0..i].to_vec())
+          .unwrap_or("error read content".as_bytes().to_vec())
       },
-      BContRead::LocalPath(mut p) => {
+      Ok(BContRead::LocalPath(mut p)) => {
         let r = &mut [0; 300];
-        let i = p.read(r).unwrap();
-        r[0..i].to_vec()
+        p.read(r).map(|i| r[0..i].to_vec())
+          .unwrap_or("error read content".as_bytes().to_vec())
+      },
+      Err(_) => {
+        "error read content".as_bytes().to_vec()
       },
     }
   })
-
 }
 
 #[cfg(feature="serialize")]
