@@ -157,6 +157,7 @@ pub struct Pbkdf2 {
   //pass : String,
   iter : usize,
   keylength : usize,
+  ivlength : usize,
   salt : Vec<u8>,
   cipher : Cipher,
   key : Vec<u8>,
@@ -176,10 +177,10 @@ impl Debug for Pbkdf2 {
 fn read_pbkdf2_header<R : Read> (file : &mut R) -> Result<(usize,usize,Vec<u8>)> {
   let iter = try!(xtendsizeread(file, PKITER_LENGTH));
 
-  let keylength = try!(xtendsizeread_foralloc(file, PKKS_LENGTH));
-  let mut salt = vec![0; keylength];
+  let saltlength = try!(xtendsizeread_foralloc(file, PKKS_LENGTH));
+  let mut salt = vec![0; saltlength];
   try!(file.read(&mut salt));
-  Ok((iter,keylength,salt))
+  Ok((iter,saltlength,salt))
 }
 
 
@@ -192,17 +193,18 @@ impl Pbkdf2 {
 
   pub fn new (pass : String, iter : usize, osalt : Option<Vec<u8>>) -> Result<Pbkdf2> {
     let cipher = Cipher::aes_256_cbc();
+    let kl = 256 / 8;
+    let ivl = kl / 2;
     let salt = match osalt {
       Some(s) => s,
       None => {
         // gen salt
         let mut rng = OsRng::new()?;
-        let mut s = vec![0; 256 /8];
+        let mut s = vec![0; ivl];
         rng.fill_bytes(&mut s);
         s
       },
     };
-    let kl = 256 / 8;
     let mut key = vec![0;kl];
     pbkdf2_hmac (
        &pass.into_bytes()[..], 
@@ -216,6 +218,7 @@ impl Pbkdf2 {
       //pass : pass,
       iter : iter, 
       keylength : kl,
+      ivlength : ivl,
       salt : salt,
       cipher : cipher,
       key : key,
@@ -239,19 +242,20 @@ impl StorageCypher for Pbkdf2 {
   fn encrypt (&self, pk : &[u8]) -> Result<Vec<u8>> {
     // gen salt
     let mut rng = OsRng::new()?;
-    let mut iv = vec![0; self.keylength];
-    rng.fill_bytes(&mut iv);
+    //let mut iv = vec![0; self.keylength];
+    let mut buff = vec![0; self.keylength];
  
+    rng.fill_bytes(&mut buff[..self.ivlength]);
 //    self.crypter.init(Mode::Encrypt,&self.key[..],iv.clone());
     let mut crypter = Crypter::new(
-      self.cipher, 
+      self.cipher,
       Mode::Encrypt, 
       &self.key[..],
-      Some(&iv[..])
+      Some(&buff[..self.ivlength])
     )?;
     crypter.pad(true);
-    let mut buff = iv;
-    let mut result = Vec::with_capacity(self.keylength * 2);
+    let mut result = Vec::with_capacity(self.ivlength + self.keylength);
+    result.extend_from_slice(&buff[..self.ivlength]);
     let mut to_enc = &pk[..];
     while to_enc.len() > 0 {
       let i = crypter.update(to_enc, &mut buff)?;
@@ -266,8 +270,8 @@ impl StorageCypher for Pbkdf2 {
   // That's bad design!! TODO maybe include an encrypted stuff in header to check key on load
   //
   fn decrypt (&self, pk : &[u8]) -> Result<Vec<u8>> {
-    let iv = &pk[..self.keylength];
-    let enc = &pk[self.keylength..];
+    let iv = &pk[..self.ivlength];
+    let enc = &pk[self.ivlength..];
     let mut crypter = Crypter::new(
       self.cipher, 
       Mode::Decrypt, 
@@ -458,7 +462,9 @@ pub fn write_striple
     > (cypher : & SC, striple : &S, owned : Option<&[u8]>, fm : &FileMode,  dest : &mut W) -> Result<()> {
       let (to_ser, ocont) = striple.striple_ser()?;
       let appendocont = match ocont {
-        None => { try!(dest.write(&[STRIPLE_TAG_BYTE])); false},
+        None => {
+          try!(dest.write(&[STRIPLE_TAG_BYTE])); false
+        },
         Some(bcont) => {
           match bcont {
             &BCont::OwnedBytes(ref b) => {
