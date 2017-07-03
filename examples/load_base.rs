@@ -1,7 +1,6 @@
 //! load base striple from a file
 //! this is an example of how to resolve types if they are not known at launch.
 extern crate striple;
-extern crate openssl;
 use std::fs::File;
 use std::io::{stdin,BufRead};
 use std::io::Cursor;

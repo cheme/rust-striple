@@ -16,8 +16,8 @@ name = "striple"
 crate-type = ["rlib", "dylib"]
 
 [features]
-#default = ["public_crypto","public_openssl","cryptoecdsa","opensslrsa","opensslpbkdf2"]
 default = ["public_crypto","serialize","public_openssl","cryptoecdsa","opensslrsa","opensslpbkdf2","for_c"]
+#default = ["public_crypto","serialize","cryptoecdsa","for_c"]
 #default = []
 serialize = ["rustc-serialize","serde"]
 opensslrsa = ["openssl"]

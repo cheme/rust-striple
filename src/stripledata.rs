@@ -30,16 +30,11 @@ use std::fmt::Result as FmtResult;
 #[cfg(feature="serialize")]
 use std::fmt::{Display,Formatter};
 
-#[cfg(feature="opensslrsa")]
-use rsa_openssl::Rsa2048Sha512;
-#[cfg(not(feature="opensslrsa"))]
-#[cfg(feature="cryptoecdsa")]
-use ecdsa_crypto::EcdsaRipemd160;
-#[cfg(not(feature="public_openssl"))]
-#[cfg(feature="public_crypto")]
-use public::public_crypto::PubRipemd;
-#[cfg(feature="public_openssl")]
-use public::public_openssl::PubSha512;
+use anystriple::Rsa2048Sha512;
+use anystriple::EcdsaRipemd160;
+use anystriple::PubRipemd;
+use anystriple::PubSha512;
+use anystriple::PubSha256;
 
 
 

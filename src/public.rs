@@ -10,6 +10,7 @@ use striple::SignatureScheme;
 use striple::PublicScheme;
 use striple::Error;
 use std::io::Read;
+use anystriple::PubRipemd;
 
 /// Technical trait
 pub trait CHash : Debug + Clone {
@@ -55,12 +56,11 @@ pub mod public_crypto {
   use super::{PubSign,CHash};
   use std::io::Read;
   use std::io::Cursor;
+  use anystriple::PubRipemd;
 
   #[cfg(test)]
   use striple::test::{test_striple_kind,chaining_test};
 
-  #[derive(Debug,Clone)]
-  pub struct PubRipemd;
 
   impl StripleKind for PubRipemd {
     type D = IdentityKD;
@@ -145,7 +145,9 @@ pub mod public_openssl {
   use stripledata;
   use striple::{StripleKind,IdentityKD};
   use super::{PubSign,CHash};
-
+  use anystriple::PubRipemd;
+  use anystriple::PubSha512;
+  use anystriple::PubSha256;
  
 fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : MessageDigest, blen : usize) -> Vec<u8> {
   //println!("{:?}",buff1);
@@ -168,15 +170,10 @@ fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : MessageDigest, blen : us
   digest.finish2().unwrap().to_vec()
 }
 
-  #[derive(Debug,Clone)]
-  pub struct PubRipemd;
-  #[derive(Debug,Clone)]
-  pub struct PubSha512;
-  #[derive(Debug,Clone)]
-  pub struct PubSha256;
 
 
 
+  #[cfg(not(feature="public_crypto"))]
   impl StripleKind for PubRipemd {
     type D = IdentityKD;
     type S = PubSign<Ripemd>;

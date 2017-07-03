@@ -9,6 +9,7 @@ use striple::IDDerivation;
 use striple::StripleKind;
 use striple::Error;
 use striple::ErrorKind;
+use anystriple::Rsa2048Sha512;
 use self::openssl::hash::{Hasher,MessageDigest,hash2};
 use self::openssl::pkey::{PKey};
 use self::openssl::rsa::{Rsa};
@@ -21,9 +22,7 @@ use std::io::Write;
 use std::io::Read;
 use stripledata;
 
-#[cfg(test)]
-#[cfg(feature="public_openssl")]
-use public::public_openssl::PubSha512;
+use anystriple::PubSha512;
 
 
 
@@ -33,15 +32,6 @@ use striple::test::{test_striple_kind,chaining_test};
 static RSA_SIZE : u32 = 2048;
 
 static HASH_BYTE_SIZE : usize = 512 / 8;
-
-
-impl From<ErrorStack> for Error {
-
-  #[inline]
-  fn from(e : ErrorStack) -> Error {
-    Error(e.to_string(), ErrorKind::IOError, Some(Box::new(e)))
-  }
-}
 
 
 /// Key derivation using SHA-512
@@ -141,8 +131,6 @@ impl SignatureScheme for Rsa2048 {
 
 
 
-#[derive(Debug,Clone)]
-pub struct Rsa2048Sha512;
 
 impl StripleKind for Rsa2048Sha512 {
   type D = SHA512KD;

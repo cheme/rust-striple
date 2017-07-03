@@ -8,7 +8,6 @@
 #[cfg(feature="opensslpbkdf2")]
 extern crate openssl;
 
-#[cfg(feature="opensslpbkdf2")]
 extern crate rand;
 
 use std::fmt::{Debug};
@@ -41,9 +40,7 @@ use self::openssl::hash::MessageDigest;
 #[cfg(feature="opensslpbkdf2")]
 use self::openssl::symm::{Cipher,Crypter,Mode};
 
-#[cfg(feature="opensslpbkdf2")]
 use self::rand::Rng;
-#[cfg(feature="opensslpbkdf2")]
 use self::rand::os::OsRng;
 use std::fmt::Result as FmtResult;
 use std::fmt::{Formatter};
@@ -135,7 +132,7 @@ derive_any_cypher!(AnyCyphers {
   Pbkdf2(Pbkdf2),
 });
 
-#[cfg(feature="not(opensslpbkdf2)")]
+#[cfg(not(feature="opensslpbkdf2"))]
 derive_any_cypher!(AnyCyphers {
   NoCypher(NoCypher),
 });
@@ -163,6 +160,7 @@ pub struct Pbkdf2 {
   key : Vec<u8>,
 }
  
+#[cfg(feature="opensslpbkdf2")]
 impl Debug for Pbkdf2 {
     fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
       ftr.debug_struct("")
@@ -184,6 +182,7 @@ fn read_pbkdf2_header<R : Read> (file : &mut R) -> Result<(usize,usize,Vec<u8>)>
 }
 
 
+#[cfg(feature="opensslpbkdf2")]
 impl Pbkdf2 {
   /// Pbkdf2 param in header
   #[inline]
@@ -699,6 +698,14 @@ pub fn init_any_cipher_stdin<R: Read> (file : &mut R, _ : ()) -> Result<AnyCyphe
       _ => Err(StripleError("Non supported cypher type".to_string(), StripleErrorKind::KindImplementationNotFound, None)),
   }
 }
+#[cfg(not(feature="opensslpbkdf2"))]
+pub fn init_any_cypher_with_pass<R: Read> (file : &mut R, pass : String) -> Result<AnyCyphers> {
+  let idcypher = try!(xtendsizeread(file, CIPHTYPE_LENGTH));
+  match idcypher {
+      0 => Ok(AnyCyphers::NoCypher(NoCypher)),
+      _ => Err(StripleError("Non supported cypher type".to_string(), StripleErrorKind::KindImplementationNotFound, None)),
+  }
+}
 #[cfg(feature="opensslpbkdf2")]
 pub fn init_any_cypher_with_pass<R: Read> (file : &mut R, pass : String) -> Result<AnyCyphers> {
   let idcypher = try!(xtendsizeread(file, CIPHTYPE_LENGTH));
@@ -717,10 +724,11 @@ pub fn init_any_cypher_with_pass<R: Read> (file : &mut R, pass : String) -> Resu
 pub fn init_any_cipher_stdin<R: Read> (file : &mut R, _ : ()) -> Result<AnyCyphers> {
   let idcypher = try!(xtendsizeread(file, CIPHTYPE_LENGTH));
   match idcypher {
-      0 => Ok(AnyCyphers::NoCypher(NoCypher)),
+      CIPHER_TAG_NOCYPHER => Ok(AnyCyphers::NoCypher(NoCypher)),
       _ => Err(StripleError("Non supported cypher type".to_string(), StripleErrorKind::KindImplementationNotFound, None)),
   }
 }
+
 
 
 // TODO switch to associated types

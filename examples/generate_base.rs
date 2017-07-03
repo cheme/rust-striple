@@ -20,16 +20,10 @@ use striple::striple::{xtendsize,xtendsizeread,read_id,push_id};
 use striple::stripledata::{BaseStriples,KindStriples};
 use std::marker::PhantomData;
 use striple::storage::{FileMode,write_striple,NoCypher,StorageCypher};
-#[cfg(not(feature="public_openssl"))]
-#[cfg(feature="public_crypto")]
-use striple::striple_kind::public::crypto::PubRipemd;
-#[cfg(feature="public_openssl")]
-use striple::striple_kind::public::openssl::PubSha512;
-#[cfg(feature="opensslrsa")]
-use striple::striple_kind::Rsa2048Sha512;
-#[cfg(not(feature="opensslrsa"))]
-#[cfg(feature="cryptoecdsa")]
-use striple::striple_kind::EcdsaRipemd160;
+use striple::anystriple::PubRipemd;
+use striple::anystriple::PubSha512;
+use striple::anystriple::Rsa2048Sha512;
+use striple::anystriple::EcdsaRipemd160;
 
 
 //tmp
@@ -208,20 +202,20 @@ fn get_base_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
 #[cfg(feature="public_crypto")]
 fn kind_gen<K : StripleKind>(pri : &BaseStriples<K>) -> Option<KindStriples<PubRipemd>> {
   println!("Generating public ripemd160 base with rust-crypto dependancy");
-  gen_kind::<PubRipemd,K>(pri,"Striple Lib Public Kind".to_string());
+  gen_kind::<PubRipemd,K>(pri,"Striple Lib Public Kind".to_string()).ok()
 }
 
 #[cfg(not(feature="public_openssl"))]
 #[cfg(feature="public_crypto")]
 fn get_kind_id<K : StripleKind>(pri : &KindStriples<K>) -> Vec<u8> {
-  pri.pubripem.0.get_id().to_vec()
+  pri.pubripemd.0.get_id().to_vec()
 }
  
 #[cfg(not(feature="opensslrsa"))]
 #[cfg(feature="cryptoecdsa")]
 fn base_gen(cat : Vec<u8>, kind : Vec<u8>) -> Option<(BaseStriples<EcdsaRipemd160>,KindStriples<EcdsaRipemd160>)> {
   println!("Generating private ECDSA of ripemd160 with rust-crypto dependancy");
-  gen_pri::<EcdsaRipemd160>(cat, kind)
+  gen_pri::<EcdsaRipemd160>(cat, kind).ok()
 }
 
 #[cfg(not(feature="opensslrsa"))]

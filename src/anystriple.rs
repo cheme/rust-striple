@@ -4,19 +4,26 @@
 //! overriden in applications.
 //!
 
-use striple::{BCont,AsStripleIf,Striple,StripleRef,Error,ref_as_kind,StripleKind,AsStriple,StripleIf,OwnedStripleIf,ErrorKind};
+use stripledata;
+use std::io::Read;
+use striple::SignatureScheme;
+use striple::IDDerivation;
+use striple::{
+  BCont,
+  AsStripleIf,
+  Striple,
+  StripleRef,
+  Error,
+  ref_as_kind,
+  StripleKind,
+  AsStriple,
+  StripleIf,
+  OwnedStripleIf,
+  ErrorKind
+};
 use striple::NoKind;
-#[cfg(feature="opensslrsa")]
-use rsa_openssl::Rsa2048Sha512;
-#[cfg(feature="cryptoecdsa")]
-use ecdsa_crypto::EcdsaRipemd160;
-#[cfg(feature="public_crypto")]
-use public::public_crypto::PubRipemd;
-#[cfg(feature="public_openssl")]
-use public::public_openssl::{PubSha512,PubSha256};
-#[cfg(not(feature="public_openssl"))]
-#[cfg(feature="public_crypto")]
-use public::public_openssl::PubRipemd;
+use striple::Result;
+use std::result::Result as StdResult;
 
 
 #[cfg(feature="opensslrsa")]
@@ -25,7 +32,7 @@ pub type StripleRSA = Striple<Rsa2048Sha512>;
 pub type StripleRSA = Striple<NoKind>;
 #[cfg(feature="cryptoecdsa")]
 pub type StripleECDSA = Striple<EcdsaRipemd160>;
-#[cfg(not(feature="opensslrsa"))]
+#[cfg(not(feature="cryptoecdsa"))]
 pub type StripleECDSA = Striple<NoKind>;
 #[cfg(feature="public_openssl")]
 pub type StriplePSha512 = Striple<PubSha512>;
@@ -43,6 +50,116 @@ pub type StriplePRIP = Striple<PubRipemd>;
 #[cfg(not(feature="public_openssl"))]
 #[cfg(not(feature="public_crypto"))]
 pub type StriplePRIP = Striple<NoKind>;
+
+
+#[derive(Debug,Clone)]
+pub struct NoImpl;
+#[derive(Debug,Clone)]
+pub struct Rsa2048Sha512;
+#[derive(Debug,Clone)]
+pub struct EcdsaRipemd160;
+#[derive(Debug,Clone)]
+pub struct PubSha512;
+#[derive(Debug,Clone)]
+pub struct PubSha256;
+#[derive(Debug,Clone)]
+pub struct PubRipemd;
+
+/// Only access to its striple but no implementation
+#[cfg(not(feature="opensslrsa"))]
+impl StripleKind for Rsa2048Sha512 {
+  type D = NoImpl;
+  type S = NoImpl;
+  fn get_algo_key() -> &'static [u8] {
+    match *stripledata::KINDIDS {
+      Some (ref kinds) => {
+        &kinds.rsa2048_sha512[..]
+      },
+      None => stripledata::RSA2048SHA512KEY,
+    }
+  }
+}
+
+#[cfg(not(feature="cryptoecdsa"))]
+impl StripleKind for EcdsaRipemd160 {
+  type D = NoImpl;
+  type S = NoImpl;
+  fn get_algo_key() -> &'static [u8] {
+    match *stripledata::KINDIDS {
+      Some (ref kinds) => {
+        &kinds.ecdsaripemd160[..]
+      },
+      None => stripledata::ECDSARIPEMD160KEY,
+    }
+  }
+}
+
+#[cfg(not(feature="public_openssl"))]
+#[cfg(not(feature="public_crypto"))]
+impl StripleKind for PubRipemd {
+    type D = NoImpl;
+    type S = NoImpl;
+    fn get_algo_key() -> &'static [u8] {
+      match *stripledata::KINDIDS {
+        Some (ref kinds) => {
+          &kinds.pubripemd[..]
+        },
+        None => stripledata::PUBRIPEMKEY,
+      }
+    }
+}
+
+#[cfg(not(feature="public_openssl"))]
+impl StripleKind for PubSha512 {
+    type D = NoImpl;
+    type S = NoImpl;
+     fn get_algo_key() -> &'static [u8] {
+      match *stripledata::KINDIDS {
+        Some (ref kinds) => {
+          &kinds.pubsha512[..]
+        },
+        None => stripledata::PUBSHA512KEY,
+      }
+    }
+
+}
+
+#[cfg(not(feature="public_openssl"))]
+impl StripleKind for PubSha256 {
+    type D = NoImpl;
+    type S = NoImpl;
+     fn get_algo_key() -> &'static [u8] {
+      match *stripledata::KINDIDS {
+        Some (ref kinds) => {
+          &kinds.pubsha256[..]
+        },
+        None => stripledata::PUBSHA256KEY,
+      }
+    }
+
+}
+
+
+impl IDDerivation for NoImpl {
+  fn derive_id(_ : &[u8]) -> Vec<u8> {
+    unimplemented!()
+  }
+  fn check_id_derivation(_ : &[u8], _ : &[u8]) -> bool {
+    unimplemented!()
+  }
+}
+
+impl SignatureScheme for NoImpl {
+  fn sign_content(_ : &[u8], _ : &mut Read) -> Result<Vec<u8>> {
+    unimplemented!()
+  }
+  fn check_content(_ : &[u8], _ : &mut Read, _ : &[u8]) -> bool {
+    unimplemented!()
+  }
+  fn new_keypair() -> (Vec<u8>, Vec<u8>) {
+    unimplemented!()
+  }
+}
 
 macro_rules! derive_any_striple(($en:ident{ $($st:ident($ty:ty),)* }) => (
 #[derive(Debug,Clone)]
@@ -77,7 +194,7 @@ derive_any_striple!(AnyStriple {
 /// Note that here we only match with library hardcoded ids (or loaded id), but in real application
 /// multiple id might be allowed, plus rules based upon striple content for case where id is
 /// unknown.
-pub fn copy_builder_any(algoid :&[u8], sr : StripleRef<NoKind>) -> Result<AnyStriple, Error> {
+pub fn copy_builder_any(algoid :&[u8], sr : StripleRef<NoKind>) -> Result<AnyStriple> {
   match algoid {
     i if (i == Rsa2048Sha512::get_algo_key()) => Ok(AnyStriple::StripleRsa(ref_as_kind(&sr).as_striple())),
     i if (i == EcdsaRipemd160::get_algo_key()) => Ok(AnyStriple::StripleECDSA(ref_as_kind(&sr).as_striple())),
@@ -102,7 +219,7 @@ impl AnyStriple {
     about: Option<Vec<u8>>,
     contentids : Vec<Vec<u8>>,
     content : Option<BCont<'static>>,
-  ) -> Result<(AnyStriple,Vec<u8>), Error> {
+  ) -> Result<(AnyStriple,Vec<u8>)> {
   match algoid {
     i if (i == Rsa2048Sha512::get_algo_key()) => {
       let (s, p) = try!(Striple::new(contentenc, from, about, contentids, content));

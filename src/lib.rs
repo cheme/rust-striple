@@ -38,30 +38,41 @@ pub mod stripledata;
 
 #[cfg(feature="opensslrsa")]
 mod rsa_openssl;
+
+
 #[cfg(feature="cryptoecdsa")]
 mod ecdsa_crypto;
 
-
+#[cfg(any(feature="opensslrsa",feature="public_openssl",feature="opensslpbkdf2"))]
+mod openssl_common {
+  extern crate openssl;
+  use self::openssl::error::ErrorStack;
+  use striple::Error;
+  use striple::ErrorKind;
+  impl From<ErrorStack> for Error {
+    #[inline]
+    fn from(e : ErrorStack) -> Error {
+      Error(e.to_string(), ErrorKind::IOError, Some(Box::new(e)))
+    }
+  }
+}
 
 pub mod striple_kind {
   pub use striple::NoKind;
 
-  pub mod public {
-    #[cfg(feature="public_crypto")]
-    pub mod crypto {
-      pub use public::public_crypto::{PubRipemd};
-    }
-    #[cfg(feature="public_openssl")]
-    pub mod openssl {
-      pub use public::public_openssl::{PubRipemd,PubSha512,PubSha256};
-    }
-  }
+  pub use anystriple::Rsa2048Sha512;
+  pub use anystriple::EcdsaRipemd160;
+  pub use anystriple::PubRipemd;
+  pub use anystriple::PubSha512;
+  pub use anystriple::PubSha256;
 
-  #[cfg(feature="opensslrsa")]
-  pub use rsa_openssl::Rsa2048Sha512;
-  #[cfg(feature="cryptoecdsa")]
-  pub use ecdsa_crypto::EcdsaRipemd160;
+
 }
+
+
+
+
+
 
 #[cfg(feature="for_c")]
 pub mod for_c;

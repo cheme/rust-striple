@@ -38,12 +38,14 @@ use striple::striple::{BCont,NoKind,StripleDisp,StripleIf,OwnedStripleIf,Striple
 #[cfg(feature="serialize")]
 use striple::striple::BASE64CONF;
 use striple::striple::Error as StripleError;
-use striple::storage::{FileMode,FileStripleIterator,write_striple,Pbkdf2,AnyCyphers};
+use striple::storage::{FileMode,FileStripleIterator,write_striple,AnyCyphers};
+#[cfg(feature="opensslpbkdf2")]
+use striple::storage::{Pbkdf2};
 use std::result::Result as StdResult;
 use std::io::{stdin,BufRead};
 use std::io::Result as IOResult;
 use num::traits::ToPrimitive;
-use striple::storage::{write_striple_file,NoCypher,RemoveKey,init_any_cipher_stdin,init_any_cypher_with_pass,init_noread_key};
+use striple::storage::{write_striple_file,NoCypher,RemoveKey,init_any_cipher_stdin,init_noread_key,init_any_cypher_with_pass};
 
 
 //#[cfg(feature="serialize")]
@@ -527,6 +529,15 @@ where B :  Fn(&[u8], StripleRef<NoKind>) -> StdResult<AnyStriple, StripleError>
   };
 }
 
+#[cfg(feature="pbkdf2")]
+fn pbkcyph(f : String) -> AnyCyphers {
+    AnyCyphers::Pbkdf2( initpkbdf2(f))
+}
+#[cfg(not(feature="pbkdf2"))]
+fn pbkcyph(f : String) -> AnyCyphers {
+   panic!("Rust striple compiled without pbkdf2")
+}
+
 #[cfg(feature="serialize")]
 fn copy_vec_oriter (args : &Args, contents : Vec<(AnyStriple,Option<Vec<u8>>)>, it : Option<AnyCyphers>)
   {
@@ -567,7 +578,7 @@ fn copy_vec_oriter (args : &Args, contents : Vec<(AnyStriple,Option<Vec<u8>>)>, 
         None => {
           match &args.flag_cipher {
             i if (i == "PBKDF2") => {
-              AnyCyphers::Pbkdf2( initpkbdf2(args.flag_outpass.clone()))
+              pbkcyph(args.flag_outpass.clone())
             },
             i if (i == "NoCipher") => AnyCyphers::NoCypher(NoCypher),
             _ => {panic!("Unknown cipher (required for new file output)")},

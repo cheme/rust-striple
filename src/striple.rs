@@ -1030,7 +1030,7 @@ pub fn from_error<T,E1 : Into<Error>>(r : StdResult<T, E1>) -> StdResult<T,Error
 #[inline]
 pub fn from_option<T>(r : Option<T>) -> Result<T> {
   match r {
-    Some(T) => Ok(T),
+    Some(t) => Ok(t),
     None => Err(Error("Unexpected None value".to_string(), ErrorKind::FromOption,None)),
   }
 }

@@ -16,10 +16,10 @@ use self::rand::Rng;
 use self::rand::os::OsRng;
 use std::io::Read;
 use std::io::Cursor;
+use anystriple::EcdsaRipemd160;
 
 #[cfg(test)]
-#[cfg(feature="public_crypto")]
-use public::public_crypto::PubRipemd;
+use anystriple::PubRipemd;
 
 #[cfg(test)]
 use striple::test::{test_striple_kind,chaining_test};
@@ -80,9 +80,6 @@ impl SignatureScheme for Ecdsa {
 
 
 
-#[derive(Debug,Clone)]
-pub struct EcdsaRipemd160;
-
 impl StripleKind for EcdsaRipemd160 {
   type D = RIPEMD160KD;
   type S = Ecdsa;
@@ -94,8 +91,6 @@ impl StripleKind for EcdsaRipemd160 {
         None => stripledata::ECDSARIPEMD160KEY,
       }
   }
-
-
 }
 
 #[test]
