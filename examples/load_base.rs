@@ -38,19 +38,19 @@ fn main() {
     sigfile.write_all(&sign[..]);
  */   
     println!("SIGN{:?}:{:?}", sign.len(), sign);
-    assert!(ownedroot.check_content(&mut Cursor::new(&cont[..]),&sign[..]));
+    assert!(ownedroot.check_content(&mut Cursor::new(&cont[..]),&sign[..]).unwrap());
 
 
-    assert!(striples[3].0.check(&ownedroot) == true);
-    assert!(striples[4].0.check(&ownedroot) == true);
+    assert!(striples[3].0.check(&ownedroot).unwrap() == true);
+    assert!(striples[4].0.check(&ownedroot).unwrap() == true);
   }
   // Doing some public check
    if striples[11].1.is_none() {
     println!("doing public checking");
     let ownedkind = (&striples[11].0, &[][..]);
 
-    assert!(striples[13].0.check(&ownedkind) == true);
-    assert!(striples[14].0.check(&ownedkind) == true);
+    assert!(striples[13].0.check(&ownedkind).unwrap() == true);
+    assert!(striples[14].0.check(&ownedkind).unwrap() == true);
   }
  
   // rewrite without private key for publishing

@@ -11,7 +11,7 @@
 //! TODO lot of read error under valgrind
 //! TODO Free fn seems useless 
 //! TODO Construct of striple not tested (probably not working (replace option by nullable pointers))
-//!
+//! TODO return error : cf all unwrap_or(false)
 
 
 use striple::{StripleIf,OwnedStripleIf,BCont,striple_dser,NoKind,StripleRef,Error};
@@ -98,7 +98,7 @@ pub unsafe extern "C" fn striple_check(st : striple_ptr, from : striple_ptr) -> 
   let f : &AnyStriple = transmute(from);
   //let s : &StripleIf = transmute(st);
   //let f : &StripleIf = transmute(from);
-  s.check(f)
+  s.check(f).unwrap_or(false)
 }
 
 macro_rules! getter(($en:ident) => (
@@ -129,7 +129,7 @@ getter!(get_sig);
 
 
 #[no_mangle]
-pub unsafe extern "C" fn private_key(st : owned_striple_ptr) -> striple_bytes {
+pub unsafe extern "C" fn private_key_clone(st : owned_striple_ptr) -> striple_bytes {
   //let s : &OwnedStripleIf = transmute(st);
   let s : &(AnyStriple, Vec<u8>) = transmute(st.0);
   let b = s.private_key_ref();

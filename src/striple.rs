@@ -43,37 +43,38 @@ pub type Result<R> = StdResult<R,Error>;
 /// TODO word on enum to serialize and manage parametric types
 pub trait StripleIf : Debug {
 
-  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> bool;
+  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool>;
   fn sign_content(&self, _ : &[u8], _ : &mut Read) -> Result<Vec<u8>>;
-  fn derive_id(&self, sig : &[u8]) -> Vec<u8>;
-  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> bool;
+  fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>>;
+  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> Result<bool>;
   /// check striple integrity (signature and key)
-  fn check (&self, from : &StripleIf) -> bool {
-    self.check_id(from) && self.check_sig(from)
+  fn check (&self, from : &StripleIf) -> Result<bool> {
+    //self.check_id(from).and_then(|a|self.check_sig(from).map(|b|a && b))
+    Ok(self.check_id(from)? && self.check_sig(from)?)
   }
 
 
   /// check signature of striple
-  fn check_sig (&self, from : &StripleIf) -> bool {
-    match self.get_tosig() {
+  fn check_sig (&self, from : &StripleIf) -> Result<bool> {
+    Ok(match self.get_tosig() {
       Ok((v, oc)) => {
         let mut cv = Cursor::new(v);
         from.get_id() == self.get_from() && match oc {
           Some (bc) => {
             match bc.get_readable() {
-              Ok(mut r) => from.check_content(&mut cv.chain(r.trait_read()), self.get_sig()),
+              Ok(mut r) => from.check_content(&mut cv.chain(r.trait_read()), self.get_sig())?,
               Err(_) => false,
             }
           },
-          None => from.check_content(&mut cv, self.get_sig()),
+          None => from.check_content(&mut cv, self.get_sig())?,
         }
       },
       Err(_) => false,
-    }
+    })
   }
 
   /// check key of striple
-  fn check_id (&self, from : &StripleIf) -> bool {
+  fn check_id (&self, from : &StripleIf) -> Result<bool> {
     from.check_id_derivation(self.get_sig(), self.get_id())
   }
 
@@ -116,7 +117,6 @@ pub trait StripleIf : Debug {
   /// If BCont is a Path, the path is written with a 2byte xtendsize before
   /// TODO ser with filename
   fn striple_ser<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)>;
-
 }
 
 /// Content wrapper over bytes with Read interface
@@ -191,8 +191,6 @@ impl<'a> BCont<'a> {
       &BCont::LocalPath(ref p) => BCont::LocalPath(p.clone()),
     }
   }
-
-
 }
 
 
@@ -221,10 +219,10 @@ pub trait PublicScheme : SignatureScheme{}
 /// build key from bytes (signature)
 pub trait IDDerivation {
   /// parameter is signature
-  fn derive_id(sig : &[u8]) -> Vec<u8>;
+  fn derive_id(sig : &[u8]) -> Result<Vec<u8>>;
   /// first parameter is signature, second is key
-  fn check_id_derivation(sig : &[u8], id : &[u8]) -> bool {
-    &Self::derive_id(sig)[..] == id
+  fn check_id_derivation(sig : &[u8], id : &[u8]) -> Result<bool> {
+    Ok(&Self::derive_id(sig)?[..] == id)
   }
 }
 
@@ -237,13 +235,13 @@ pub struct IdentityKD;
 impl IDDerivation for IdentityKD {
   /// id
   #[inline]
-  fn derive_id(sig : &[u8]) -> Vec<u8> {
-    sig.to_vec()
+  fn derive_id(sig : &[u8]) -> Result<Vec<u8>> {
+    Ok(sig.to_vec())
   }
   /// simply equality
   #[inline]
-  fn check_id_derivation(sig : &[u8], id : &[u8]) -> bool {
-    sig == id 
+  fn check_id_derivation(sig : &[u8], id : &[u8]) -> Result<bool> {
+    Ok(sig == id)
   }
 }
 
@@ -262,17 +260,17 @@ pub trait SignatureScheme {
 
 // TODO result in check (right now an error is seen as not checked)?
   /// first parameter is public key, second is content and third is signature
-  fn check_content(publ : &[u8],cont : &mut Read, sig : &[u8]) -> bool;
+  fn check_content(publ : &[u8],cont : &mut Read, sig : &[u8]) -> Result<bool>;
 
   /// create keypair (first is public, second is private)
-  fn new_keypair() -> (Vec<u8>, Vec<u8>);
+  fn new_keypair() -> Result<(Vec<u8>, Vec<u8>)>;
 
 }
 
 pub trait OwnedStripleIf : StripleIf {
 
   /// owned striple has a private key, default implementation is inefficient
-  fn private_key(&self) -> Vec<u8> {
+  fn private_key_clone(&self) -> Vec<u8> {
     self.private_key_ref().to_vec()
   }
 
@@ -313,7 +311,7 @@ impl<'a, ST : StripleIf> AsStripleIf for (ST, Vec<u8>) {
 impl<ST : StripleIf> OwnedStripleIf for (ST, Vec<u8>) {
 
   #[inline]
-  fn private_key (&self) -> Vec<u8> {
+  fn private_key_clone(&self) -> Vec<u8> {
     self.1.clone()
   }
 
@@ -327,7 +325,7 @@ impl<ST : StripleIf> OwnedStripleIf for (ST, Vec<u8>) {
 impl<'b, ST : StripleIf> OwnedStripleIf for (&'b ST, &'b [u8]) {
 
   #[inline]
-  fn private_key (&self) -> Vec<u8> {
+  fn private_key_clone (&self) -> Vec<u8> {
     self.1.to_vec()
   }
 
@@ -356,7 +354,7 @@ impl<'a, S : StripleIf> PubStriple for UnsafePubStriple<'a, S> {}
 /// public scheme uses same value for public and private key
 impl<S : PubStriple> OwnedStripleIf for S {
 
-  fn private_key (&self) -> Vec<u8> {
+  fn private_key_clone (&self) -> Vec<u8> {
     self.get_key().to_vec()
   }
 
@@ -468,7 +466,7 @@ impl<T : StripleKind> Striple<T> {
     contentids : Vec<Vec<u8>>,
     content : Option<BCont<'static>>,
   ) -> Result<(Striple<T>,Vec<u8>)> {
-    let keypair = T::S::new_keypair();
+    let keypair = T::S::new_keypair()?;
     let mut res = Striple {
         contentenc : contentenc,
         id : vec!(),
@@ -484,8 +482,8 @@ impl<T : StripleKind> Striple<T> {
 
     let (sig,id) = match from {
       Some (st) => {
-        let sig = try!(st.sign(&res));
-        let id = st.derive_id(&sig);
+        let sig = st.sign(&res)?;
+        let id = st.derive_id(&sig)?;
         (sig, id)
       },
       None => {
@@ -495,11 +493,11 @@ impl<T : StripleKind> Striple<T> {
           Some (bc) => {
             let mut r = try!(bc.get_readable());
             let mut tos = cv.chain(r.trait_read());
-            try!(T::S::sign_content(&keypair.1, &mut tos))
+            T::S::sign_content(&keypair.1, &mut tos)?
           },
-          None => try!(T::S::sign_content(&keypair.1, &mut cv)),
+          None => T::S::sign_content(&keypair.1, &mut cv)?,
         };
-        let id = T::D::derive_id(&sig);
+        let id = T::D::derive_id(&sig)?;
         (sig, id)
       },
     };
@@ -536,7 +534,7 @@ impl<T : StripleKind> StripleIf for Striple<T> {
     T::get_algo_key()
   }
   #[inline]
-  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> bool {
+  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool> {
     T::S::check_content(&self.key, cont, sig)
   }
   #[inline]
@@ -544,11 +542,11 @@ impl<T : StripleKind> StripleIf for Striple<T> {
     T::S::sign_content(pri, con)
   }
   #[inline]
-  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> bool {
+  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> Result<bool> {
     T::D::check_id_derivation(sig,id)
   }
   #[inline]
-  fn derive_id(&self, sig : &[u8]) -> Vec<u8> {
+  fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>> {
     T::D::derive_id(sig)
   }
  
@@ -610,7 +608,7 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
     T::get_algo_key()
   }
   #[inline]
-  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> bool {
+  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool> {
     T::S::check_content(self.key, cont, sig)
   }
   #[inline]
@@ -618,11 +616,11 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
     T::S::sign_content(pri, con)
   }
   #[inline]
-  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> bool {
+  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> Result<bool> {
     T::D::check_id_derivation(sig,id)
   }
   #[inline]
-  fn derive_id(&self, sig : &[u8]) -> Vec<u8> {
+  fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>> {
     T::D::derive_id(sig)
   }
  
@@ -767,33 +765,24 @@ pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (byte
   };
 
   let s = xtendsizedec(bytes, &mut ix, CONTENT_LENGTH);
-  let checkerror : Option<Error> = docheck.and_then(|fromst|{
+  if let Some(fromst) = docheck {
     if fromst.get_id() != &from[..] {
-      return Some(Error("Unexpected from id".to_string(), ErrorKind::UnexpectedStriple, None))
+      return Err(Error("Unexpected from id".to_string(), ErrorKind::UnexpectedStriple, None))
     };
     let tocheck = &bytes[startcontent .. bytes.len()];
  
-    if !( fromst.check_id_derivation(sig,id) &&
+    if !( fromst.check_id_derivation(sig,id)? &&
       match &obc {
         &Some (ref bc) => {
-          match bc.get_readable() {
-            Ok(mut r) => {
-              let mut tos = Cursor::new(tocheck).chain(r.trait_read());
-              fromst.check_content(&mut tos, sig)
-            },
-            Err(r) => return Some(r),
-          }
+          let mut r = bc.get_readable()?;
+          let mut tos = Cursor::new(tocheck).chain(r.trait_read());
+          fromst.check_content(&mut tos, sig)?
         },
-        &None => fromst.check_content(&mut Cursor::new(tocheck), sig),
+        &None => fromst.check_content(&mut Cursor::new(tocheck), sig)?,
       })
     {
-      return Some(Error("Invalid signature or key derivation".to_string(), ErrorKind::UnexpectedStriple, None))
+      return Err(Error("Invalid signature or key derivation".to_string(), ErrorKind::UnexpectedStriple, None))
     };
-    None
-  });
-  match checkerror {
-    Some(err) => {return Err(err);}
-    None => ()
   };
 
   let content = match obc {
@@ -855,7 +844,7 @@ pub trait AsStripleIf {
 // boilerplate adapter code
 impl<T : AsStripleIf + Debug> StripleIf for T {
   #[inline]
-  fn check_content(&self, cont : &mut Read,sig : &[u8]) -> bool {
+  fn check_content(&self, cont : &mut Read,sig : &[u8]) -> Result<bool> {
     self.as_striple_if().check_content(cont,sig)
   }
   #[inline]
@@ -863,11 +852,11 @@ impl<T : AsStripleIf + Debug> StripleIf for T {
     self.as_striple_if().sign_content(a,b)
   }
   #[inline]
-  fn derive_id(&self, sig : &[u8]) -> Vec<u8> {
+  fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>> {
     self.as_striple_if().derive_id(sig)
   }
   #[inline]
-  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> bool {
+  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> Result<bool> {
     self.as_striple_if().check_id_derivation(sig,id)
   }
   #[inline]
@@ -1341,23 +1330,22 @@ impl StripleKind for NoKind {
   }
 }
 impl IDDerivation for NoIDDer {
-  fn derive_id(_ : &[u8]) -> Vec<u8> {
-    vec!()
+  fn derive_id(_ : &[u8]) -> Result<Vec<u8>> {
+    Err(Error("NoDerivation".to_string(), ErrorKind::KindImplementationNotFound, None))
   }
-  fn check_id_derivation(_ : &[u8], _ : &[u8]) -> bool {
-    false
+  fn check_id_derivation(_ : &[u8], _ : &[u8]) -> Result<bool> {
+    Err(Error("NoDerivation".to_string(), ErrorKind::KindImplementationNotFound, None))
   }
-
 }
 impl SignatureScheme for NoSigCh {
-  fn sign_content(_ : &[u8], _ : &mut Read) -> StdResult<Vec<u8>,Error> {
-    Ok(vec!())
+  fn sign_content(_ : &[u8], _ : &mut Read) -> Result<Vec<u8>> {
+    Err(Error("NoSign".to_string(), ErrorKind::KindImplementationNotFound, None))
   }
-  fn check_content(_ : &[u8],_ : &mut Read,_ : &[u8]) -> bool {
-    false
+  fn check_content(_ : &[u8],_ : &mut Read,_ : &[u8]) -> Result<bool> {
+    Err(Error("NoSign".to_string(), ErrorKind::KindImplementationNotFound, None))
   }
-  fn new_keypair() -> (Vec<u8>, Vec<u8>) {
-    (vec!(), vec!())
+  fn new_keypair() -> Result<(Vec<u8>, Vec<u8>)> {
+    Err(Error("NoSign".to_string(), ErrorKind::KindImplementationNotFound, None))
   }
 }
 
@@ -1468,12 +1456,12 @@ pub mod test {
     }
   }
   impl IDDerivation for TestKeyDer1 {
-    fn derive_id(sig : &[u8]) -> Vec<u8> {
+    fn derive_id(sig : &[u8]) -> Result<Vec<u8>> {
       // simply use signature as key
-      sig.to_vec()
+      Ok(sig.to_vec())
     }
-    fn check_id_derivation(sig : &[u8], id : &[u8]) -> bool {
-      sig == id 
+    fn check_id_derivation(sig : &[u8], id : &[u8]) -> Result<bool> {
+      Ok(sig == id) 
     }
 
   }
@@ -1482,17 +1470,17 @@ pub mod test {
       // Dummy : just use pri
       Ok(pri.to_vec())
     }
-    fn check_content(publ : &[u8], _ : &mut Read, sig : &[u8]) -> bool {
+    fn check_content(publ : &[u8], _ : &mut Read, sig : &[u8]) -> Result<bool> {
       // Dummy
       debug!("checkcontet :pub {:?}, sig {:?}", publ, sig);
-      publ != sig
+      Ok(publ != sig)
     }
-    fn new_keypair() -> (Vec<u8>, Vec<u8>) {
+    fn new_keypair() -> Result<(Vec<u8>, Vec<u8>)> {
       // Dummy pri is same as pub
       let mut tmp = [0u8; 4];
       rand::thread_rng().fill_bytes(&mut tmp);
       let rand = tmp.to_vec();
-      (rand.clone(), rand)
+      Ok((rand.clone(), rand))
     }
   }
 
@@ -1632,10 +1620,10 @@ pub mod test {
       return unique_key_der::<D>(sig_length)
     }
 
-    let key_1 = D::derive_id (sig_1);
-    let key_2 = D::derive_id (sig_2);
-    let key_3 = D::derive_id (sig_3);
-    let key_null = D::derive_id (sig_null);
+    let key_1 = D::derive_id (sig_1).unwrap();
+    let key_2 = D::derive_id (sig_2).unwrap();
+    let key_3 = D::derive_id (sig_3).unwrap();
+    let key_null = D::derive_id (sig_null).unwrap();
 
     assert!((sig_1 == sig_2) || (key_1 != key_2));
     assert!((sig_2 == sig_2) || (key_2 != key_2));
@@ -1646,15 +1634,15 @@ pub mod test {
     // case with small sig
     assert!(sig_null.len() == key_null.len());
 
-    assert!(D::check_id_derivation(sig_3, &key_3));
+    assert!(D::check_id_derivation(sig_3, &key_3).unwrap());
     // TODO something with this case
     // assert!(!D::check_id_derivation(sig_null, &key_null));
 
   }
 
   fn pub_sign<S : SignatureScheme> () {
-    let kp1 = S::new_keypair();
-    let kp2 = S::new_keypair();
+    let kp1 = S::new_keypair().unwrap();
+    let kp2 = S::new_keypair().unwrap();
     let mut cont_1 = Cursor::new(vec!(1,2,3,4));
     let mut cont_2 = Cursor::new(vec!());
     let sig_1 = S::sign_content(&kp1.1, &mut cont_1).unwrap();
@@ -1669,12 +1657,12 @@ pub mod test {
     assert!(kp2.0 == kp2.1);
  
     // check content does depend on from keypair (from must be added to content if hashing scheme)
-    assert!(S::check_content(&kp1.0, &mut cont_1, &sig_1));
+    assert!(S::check_content(&kp1.0, &mut cont_1, &sig_1).unwrap());
     cont_1.seek(SeekFrom::Start(0)).unwrap();
-    assert!(!S::check_content(&vec!(1,2,3,4), &mut cont_1, &sig_1));
+    assert!(!S::check_content(&vec!(1,2,3,4), &mut cont_1, &sig_1).unwrap());
     cont_1.seek(SeekFrom::Start(0)).unwrap();
     // and sig validate content
-    assert!(!S::check_content(&kp2.0, &mut cont_2, &vec!()));
+    assert!(!S::check_content(&kp2.0, &mut cont_2, &vec!()).unwrap());
     cont_2.seek(SeekFrom::Start(0)).unwrap();
 
     // signing do not have salt (uniqueness by keypair pub in content).
@@ -1686,8 +1674,8 @@ pub mod test {
   }
 
   fn pri_sign<S : SignatureScheme> () {
-    let kp1 = S::new_keypair();
-    let kp2 = S::new_keypair();
+    let kp1 = S::new_keypair().unwrap();
+    let kp2 = S::new_keypair().unwrap();
     let mut cont_1 = Cursor::new(vec!(1,2,3,4));
     let mut cont_2 = Cursor::new(vec!(1,2,3,4,5));
     let sig_1 = S::sign_content(&kp1.1, &mut cont_1).unwrap();
@@ -1712,11 +1700,11 @@ pub mod test {
     // assert!(S::sign_content(&kp2.1[..], cont_2) != sig_2);
 
     // check content only when finely signed
-    assert!(!S::check_content(&kp1.0[..], &mut cont_1, &vec!(4)[..]));
+    assert!(!S::check_content(&kp1.0[..], &mut cont_1, &vec!(4)[..]).unwrap());
     cont_1.seek(SeekFrom::Start(0)).unwrap();
-    assert!(S::check_content(&kp1.0[..], &mut cont_1, &sig_1[..]));
+    assert!(S::check_content(&kp1.0[..], &mut cont_1, &sig_1[..]).unwrap());
     cont_1.seek(SeekFrom::Start(0)).unwrap();
-    assert!(S::check_content(&kp2.0[..], &mut cont_2, &sig_2[..]));
+    assert!(S::check_content(&kp2.0[..], &mut cont_2, &sig_2[..]).unwrap());
     cont_2.seek(SeekFrom::Start(0)).unwrap();
   }
 
@@ -1739,7 +1727,7 @@ pub mod test {
     assert!(root.get_id() == root.get_about());
 
     // check signed by itself
-    assert!(root.check(&root));
+    assert!(root.check(&root).unwrap());
     
      let ownedson1 : (Striple<K1>, Vec<u8>) = Striple::new(
       contentenc.clone(),
@@ -1752,8 +1740,8 @@ pub mod test {
     ).unwrap();
     let son1 = ownedson1.0;
 
-    assert!(son1.check(&root));
-    assert!(!son1.check(&son1));
+    assert!(son1.check(&root).unwrap());
+    assert!(!son1.check(&son1).unwrap());
 
     let ownedson2 : (Striple<K2>, Vec<u8>) = Striple::new(
       contentenc.clone(),
@@ -1767,9 +1755,9 @@ pub mod test {
     ).unwrap();
     let son2 = ownedson2.0;
  
-    assert!(son2.check(&root));
-    assert!(!son2.check(&son1));
-    assert!(!son2.check(&son2));
+    assert!(son2.check(&root).unwrap());
+    assert!(!son2.check(&son1).unwrap());
+    assert!(!son2.check(&son2).unwrap());
 
 
 
@@ -1784,8 +1772,8 @@ pub mod test {
     ).unwrap();
     let son21 = ownedson21.0;
  
-    assert!(son21.check(&son2));
-    assert!(!son21.check(&root));
+    assert!(son21.check(&son2).unwrap());
+    assert!(!son21.check(&root).unwrap());
 
     let ownedson22 : (Striple<K2>, Vec<u8>) = Striple::new(
       contentenc.clone(),
@@ -1798,8 +1786,8 @@ pub mod test {
     ).unwrap();
     let son22 = ownedson22.0;
 
-    assert!(son22.check(&son2));
-    assert!(!son22.check(&root));
+    assert!(son22.check(&son2).unwrap());
+    assert!(!son22.check(&root).unwrap());
 
     let ownedson22bis : (Striple<K2>, Vec<u8>) = Striple::new(
       contentenc.clone(),
@@ -1817,64 +1805,64 @@ pub mod test {
     let unknown_vec = random_bytes(6);
     // check changing `from` break previous checking (even if same from in check)
     let mut tmp2 = son22.clone();
-    assert!(tmp2.check(&son2));
+    assert!(tmp2.check(&son2).unwrap());
     let mut tmp1 = son1.clone();
-    assert!(tmp1.check(&root));
+    assert!(tmp1.check(&root).unwrap());
     tmp2.from = unknown_vec.clone();
-    assert!(!tmp2.check(&son2));
+    assert!(!tmp2.check(&son2).unwrap());
     tmp1.from = unknown_vec.clone();
-    assert!(!tmp1.check(&root));
+    assert!(!tmp1.check(&root).unwrap());
     
     // check changing `about` break previous checking...
     tmp2 = son22.clone();
     tmp1 = son1.clone();
     tmp2.about = unknown_vec.clone();
-    assert!(!tmp2.check(&son2));
+    assert!(!tmp2.check(&son2).unwrap());
     tmp1.about = unknown_vec.clone();
-    assert!(!tmp1.check(&root));
+    assert!(!tmp1.check(&root).unwrap());
     // check changing `content` break previous checking...
     tmp2 = son22.clone();
     tmp1 = son1.clone();
     tmp2.content = Some(BCont::OwnedBytes(unknown_vec.clone()));
-    assert!(!tmp2.check(&son2));
+    assert!(!tmp2.check(&son2).unwrap());
     tmp1.content = Some(BCont::OwnedBytes(unknown_vec.clone()));
-    assert!(!tmp1.check(&root));
+    assert!(!tmp1.check(&root).unwrap());
     // check changing `contentid` break previous checking...
     tmp2 = son22.clone();
     tmp1 = son1.clone();
     tmp2.contentids = vec!(unknown_vec.clone());
-    assert!(!tmp2.check(&son2));
+    assert!(!tmp2.check(&son2).unwrap());
     tmp1.contentids = vec!(unknown_vec.clone());
-    assert!(!tmp1.check(&root));
+    assert!(!tmp1.check(&root).unwrap());
     // check changing `key` break previous checking...
     tmp2 = son22.clone();
     tmp1 = son1.clone();
     tmp2.key = unknown_vec.clone();
-    assert!(!tmp2.check(&son2));
+    assert!(!tmp2.check(&son2).unwrap());
     tmp1.key = unknown_vec.clone();
-    assert!(!tmp1.check(&root));
+    assert!(!tmp1.check(&root).unwrap());
     // check changing `sig` break previous checking...
     tmp2 = son22.clone();
     tmp1 = son1.clone();
     tmp2.sig = unknown_vec.clone();
-    assert!(!tmp2.check(&son2));
+    assert!(!tmp2.check(&son2).unwrap());
     tmp1.sig = unknown_vec.clone();
-    assert!(!tmp1.check(&root));
+    assert!(!tmp1.check(&root).unwrap());
     // check changing `id` break previous checking...
     tmp2 = son22.clone();
     tmp1 = son1.clone();
     tmp2.id = unknown_vec.clone();
-    assert!(!tmp2.check(&son2));
+    assert!(!tmp2.check(&son2).unwrap());
     tmp1.id = unknown_vec.clone();
-    assert!(!tmp1.check(&root));
+    assert!(!tmp1.check(&root).unwrap());
     // check changing `encodingid` is impactless previous checking... (content encoding is not in
     // scheme and purely meta)
     tmp2 = son22.clone();
     tmp1 = son1.clone();
     tmp2.contentenc = unknown_vec.clone();
-    assert!(tmp2.check(&son2));
+    assert!(tmp2.check(&son2).unwrap());
     tmp1.contentenc = unknown_vec.clone();
-    assert!(tmp1.check(&root));
+    assert!(tmp1.check(&root).unwrap());
 
   }
 

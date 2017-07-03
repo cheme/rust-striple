@@ -275,7 +275,7 @@ fn run() {
      };
      match ofrom {
        Some(ref from) => {
-         if to_check.check(&from.0) {
+         if to_check.check(&from.0).unwrap() {
            println!("check ok");
          } else {
            println!("striple does not check");

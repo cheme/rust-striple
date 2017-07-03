@@ -9,6 +9,8 @@ use std::io::Read;
 use striple::SignatureScheme;
 use striple::IDDerivation;
 use striple::{
+  NoSigCh,
+  NoIDDer,
   BCont,
   AsStripleIf,
   Striple,
@@ -53,8 +55,6 @@ pub type StriplePRIP = Striple<NoKind>;
 
 
 #[derive(Debug,Clone)]
-pub struct NoImpl;
-#[derive(Debug,Clone)]
 pub struct Rsa2048Sha512;
 #[derive(Debug,Clone)]
 pub struct EcdsaRipemd160;
@@ -68,8 +68,8 @@ pub struct PubRipemd;
 /// Only access to its striple but no implementation
 #[cfg(not(feature="opensslrsa"))]
 impl StripleKind for Rsa2048Sha512 {
-  type D = NoImpl;
-  type S = NoImpl;
+  type D = NoIDDer;
+  type S = NoSigCh;
   fn get_algo_key() -> &'static [u8] {
     match *stripledata::KINDIDS {
       Some (ref kinds) => {
@@ -82,8 +82,8 @@ impl StripleKind for Rsa2048Sha512 {
 
 #[cfg(not(feature="cryptoecdsa"))]
 impl StripleKind for EcdsaRipemd160 {
-  type D = NoImpl;
-  type S = NoImpl;
+  type D = NoIDDer;
+  type S = NoSigCh;
   fn get_algo_key() -> &'static [u8] {
     match *stripledata::KINDIDS {
       Some (ref kinds) => {
@@ -97,8 +97,8 @@ impl StripleKind for EcdsaRipemd160 {
 #[cfg(not(feature="public_openssl"))]
 #[cfg(not(feature="public_crypto"))]
 impl StripleKind for PubRipemd {
-    type D = NoImpl;
-    type S = NoImpl;
+    type D = NoIDDer;
+    type S = NoSigCh;
     fn get_algo_key() -> &'static [u8] {
       match *stripledata::KINDIDS {
         Some (ref kinds) => {
@@ -111,8 +111,8 @@ impl StripleKind for PubRipemd {
 
 #[cfg(not(feature="public_openssl"))]
 impl StripleKind for PubSha512 {
-    type D = NoImpl;
-    type S = NoImpl;
+    type D = NoIDDer;
+    type S = NoSigCh;
      fn get_algo_key() -> &'static [u8] {
       match *stripledata::KINDIDS {
         Some (ref kinds) => {
@@ -126,8 +126,8 @@ impl StripleKind for PubSha512 {
 
 #[cfg(not(feature="public_openssl"))]
 impl StripleKind for PubSha256 {
-    type D = NoImpl;
-    type S = NoImpl;
+    type D = NoIDDer;
+    type S = NoSigCh;
      fn get_algo_key() -> &'static [u8] {
       match *stripledata::KINDIDS {
         Some (ref kinds) => {
@@ -140,26 +140,6 @@ impl StripleKind for PubSha256 {
 }
 
 
-impl IDDerivation for NoImpl {
-  fn derive_id(_ : &[u8]) -> Vec<u8> {
-    unimplemented!()
-  }
-  fn check_id_derivation(_ : &[u8], _ : &[u8]) -> bool {
-    unimplemented!()
-  }
-}
-
-impl SignatureScheme for NoImpl {
-  fn sign_content(_ : &[u8], _ : &mut Read) -> Result<Vec<u8>> {
-    unimplemented!()
-  }
-  fn check_content(_ : &[u8], _ : &mut Read, _ : &[u8]) -> bool {
-    unimplemented!()
-  }
-  fn new_keypair() -> (Vec<u8>, Vec<u8>) {
-    unimplemented!()
-  }
-}
 
 macro_rules! derive_any_striple(($en:ident{ $($st:ident($ty:ty),)* }) => (
 #[derive(Debug,Clone)]

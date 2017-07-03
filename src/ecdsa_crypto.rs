@@ -8,6 +8,7 @@ use striple::SignatureScheme;
 use striple::IDDerivation;
 use striple::StripleKind;
 use striple::Error;
+use striple::Result;
 use self::crypto::digest::Digest;
 use self::crypto::ripemd160::Ripemd160;
 use self::crypto::ed25519;
@@ -32,10 +33,10 @@ pub struct RIPEMD160KD;
 impl IDDerivation for RIPEMD160KD {
   /// id
   #[inline]
-  fn derive_id(sig : &[u8]) -> Vec<u8> {
+  fn derive_id(sig : &[u8]) -> Result<Vec<u8>> {
     // TODO len to 512 when test ok
     if sig.len() < 1 {
-      Vec::new()
+      Ok(Vec::new())
     } else {
       let mut digest = Ripemd160::new();
       hash_buf_crypto(&mut Cursor::new(sig), &mut digest)
@@ -50,31 +51,31 @@ pub struct Ecdsa;
 /// generic public signature scheme
 impl SignatureScheme for Ecdsa {
   /// hash of content and from key (pri)
-  fn sign_content(pri : &[u8], cont : &mut Read) -> Result<Vec<u8>,Error> {
+  fn sign_content(pri : &[u8], cont : &mut Read) -> Result<Vec<u8>> {
     let mut digest = Ripemd160::new();
-    let chash = hash_buf_crypto(cont, &mut digest);
+    let chash = hash_buf_crypto(cont, &mut digest)?;
  
     let sig = ed25519::signature(&chash, pri).to_vec();
     Ok(sig)
   }
 
   /// first parameter is public key, second is content and third is signature
-  fn check_content(publ : &[u8], cont : &mut Read, sign : &[u8]) -> bool {
-    if sign.len() != 64 {
+  fn check_content(publ : &[u8], cont : &mut Read, sign : &[u8]) -> Result<bool> {
+    Ok(if sign.len() != 64 {
       false
     } else {
       let mut digest = Ripemd160::new();
-      let chash = hash_buf_crypto(cont, &mut digest);
+      let chash = hash_buf_crypto(cont, &mut digest)?;
 
       ed25519::verify(&chash,publ,sign)
-    }
+    })
   }
 
   /// create keypair (first is public, second is private)
-  fn new_keypair() -> (Vec<u8>, Vec<u8>) {
+  fn new_keypair() -> Result<(Vec<u8>, Vec<u8>)> {
     let seed = sec_random_bytes(32);
     let (pr, pu) = ed25519::keypair(&seed);
-    (pu.to_vec(), pr.to_vec())
+    Ok((pu.to_vec(), pr.to_vec()))
   }
 }
 
@@ -124,7 +125,7 @@ fn test_chaining_multi() {
 
 
 
-fn hash_buf_crypto(r : &mut Read, digest : &mut Digest) -> Vec<u8> {
+fn hash_buf_crypto(r : &mut Read, digest : &mut Digest) -> Result<Vec<u8>> {
   let bsize = digest.block_size();
   let bbytes = (bsize+7)/8;
   let ressize = digest.output_bits();
@@ -135,7 +136,7 @@ fn hash_buf_crypto(r : &mut Read, digest : &mut Digest) -> Vec<u8> {
   let buff = &mut vbuff[..];
 
   loop {
-    let end = r.read(buff).unwrap();
+    let end = r.read(buff)?;
     if end == 0 {
           break
     };
@@ -146,10 +147,9 @@ fn hash_buf_crypto(r : &mut Read, digest : &mut Digest) -> Vec<u8> {
     };
   };
 
-  let mut rvec : Vec<u8> = vec![0; outbytes];
-  let rbuf = &mut rvec;
-  digest.result(rbuf);
-  rbuf.to_vec()
+  let mut rvec = vec![0; outbytes];
+  digest.result(&mut rvec);
+  Ok(rvec)
 }
 
 

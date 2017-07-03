@@ -9,12 +9,13 @@ use std::marker::PhantomData;
 use striple::SignatureScheme;
 use striple::PublicScheme;
 use striple::Error;
+use striple::Result;
 use std::io::Read;
 use anystriple::PubRipemd;
 
 /// Technical trait
 pub trait CHash : Debug + Clone {
-  fn hash (from : &[u8], content : &mut Read) -> Vec<u8>;
+  fn hash (from : &[u8], content : &mut Read) -> Result<Vec<u8>>;
   fn len () -> usize;
 }
 
@@ -24,20 +25,20 @@ pub struct PubSign<H : CHash>(PhantomData<H>);
 /// generic public signature scheme
 impl<H : CHash> SignatureScheme for PubSign<H> {
   /// hash of content and from key (pri)
-  fn sign_content(pri : &[u8], cont : &mut Read) -> Result<Vec<u8>,Error> {
-    Ok(H::hash(pri, cont))
+  fn sign_content(pri : &[u8], cont : &mut Read) -> Result<Vec<u8>> {
+    H::hash(pri, cont)
   }
 
   /// first parameter is public key, second is content and third is signature
-  fn check_content(publ : &[u8], cont : &mut Read, sig : &[u8]) -> bool {
-    Self::sign_content(publ, cont).map(|s|s == sig).unwrap_or(false)
+  fn check_content(publ : &[u8], cont : &mut Read, sig : &[u8]) -> Result<bool> {
+    Ok(Self::sign_content(publ, cont)? == sig)
   }
 
   /// create keypair (first is public, second is private)
   /// TODO size shoud depend on hash length (num biguint?)
-  fn new_keypair() -> (Vec<u8>, Vec<u8>) {
+  fn new_keypair() -> Result<(Vec<u8>, Vec<u8>)> {
     let id = Uuid::new_v4().as_bytes().to_vec();
-    (id.clone(),id)
+    Ok((id.clone(),id))
   }
 }
 
@@ -49,7 +50,7 @@ impl<H : CHash> PublicScheme for PubSign<H> {}
 #[cfg(feature="public_crypto")]
 pub mod public_crypto {
   extern crate crypto;
-  use striple::{StripleKind,IdentityKD};
+  use striple::{StripleKind,IdentityKD,Result};
   use stripledata;
   use self::crypto::digest::Digest;
   use self::crypto::ripemd160::Ripemd160;
@@ -81,7 +82,7 @@ pub mod public_crypto {
 
   impl CHash for Ripemd {
 
-  fn hash(buff1 : &[u8], buff2 : &mut Read) -> Vec<u8> {
+  fn hash(buff1 : &[u8], buff2 : &mut Read) -> Result<Vec<u8>> {
     let digest = Ripemd160::new();
     hash_crypto(buff1, buff2, digest)
   }
@@ -91,7 +92,7 @@ pub mod public_crypto {
   }
   }
 
-  fn hash_crypto<H : Digest>(buff1 : &[u8], buff2 : &mut Read, mut digest : H) -> Vec<u8> {
+  fn hash_crypto<H : Digest>(buff1 : &[u8], buff2 : &mut Read, mut digest : H) -> Result<Vec<u8>> {
     let mut r = Cursor::new(buff1).chain(buff2);
 
     let bbytes = digest.block_size();
@@ -103,7 +104,7 @@ pub mod public_crypto {
     let mut vbuf = vec!(0;bbytes);
     let buff = &mut vbuf[..];
     loop {
-      let end = r.read(buff).unwrap();
+      let end = r.read(buff)?;
       if end == 0 {
         break
       };
@@ -113,12 +114,10 @@ pub mod public_crypto {
         digest.input(buff);
       };
     };
-
     //  digest.input(&buf[(nbiter -1)*bbytes .. ]);
     let mut rvec : Vec<u8> = vec![0; outbytes];
-    let rbuf = &mut rvec;
-    digest.result(rbuf);
-    rbuf.to_vec()
+    digest.result(&mut rvec);
+    Ok(rvec)
   }
  
   #[test]
@@ -143,31 +142,31 @@ pub mod public_openssl {
   #[cfg(test)]
   use striple::test::{test_striple_kind,chaining_test};
   use stripledata;
-  use striple::{StripleKind,IdentityKD};
+  use striple::{StripleKind,IdentityKD,Result};
   use super::{PubSign,CHash};
   use anystriple::PubRipemd;
   use anystriple::PubSha512;
   use anystriple::PubSha256;
  
-fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : MessageDigest, blen : usize) -> Vec<u8> {
+fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : MessageDigest, blen : usize) -> Result<Vec<u8>> {
   //println!("{:?}",buff1);
   let mut r = Cursor::new(buff1).chain(buff2);
-  let mut digest = Hasher::new(typ).unwrap();
+  let mut digest = Hasher::new(typ)?;
   //println!("bufflen {:?}", bbytes);
   let mut vbuff = vec!(0;blen);
   let buff = &mut vbuff[..];
   loop {
-    let end = r.read(buff).unwrap();
+    let end = r.read(buff)?;
     if end == 0 {
       break
     };
     if end != blen {
-     digest.write(&buff[0 .. end]).unwrap();
+     digest.write(&buff[0 .. end])?;
     } else {
-      digest.write(buff).unwrap();
+      digest.write(buff)?;
     };
   };
-  digest.finish2().unwrap().to_vec()
+  Ok(digest.finish2()?.to_vec())
 }
 
 
@@ -225,7 +224,7 @@ fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : MessageDigest, blen : us
 
 
   impl CHash for Ripemd {
-    fn hash(buff1 : &[u8], buff2 : &mut Read) -> Vec<u8> {
+    fn hash(buff1 : &[u8], buff2 : &mut Read) -> Result<Vec<u8>> {
       hash_openssl(buff1, buff2, MessageDigest::ripemd160(),Self::len()/8)
     }
     fn len() -> usize {
@@ -233,7 +232,7 @@ fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : MessageDigest, blen : us
     }
   }
   impl CHash for Sha512 {
-    fn hash(buff1 : &[u8], buff2 : &mut Read) -> Vec<u8> {
+    fn hash(buff1 : &[u8], buff2 : &mut Read) -> Result<Vec<u8>> {
       hash_openssl(buff1, buff2, MessageDigest::sha512(),Self::len()/8)
     }
     fn len() -> usize {
@@ -241,7 +240,7 @@ fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : MessageDigest, blen : us
     }
   }
   impl CHash for Sha256 {
-    fn hash(buff1 : &[u8], buff2 : &mut Read) -> Vec<u8> {
+    fn hash(buff1 : &[u8], buff2 : &mut Read) -> Result<Vec<u8>> {
       hash_openssl(buff1, buff2, MessageDigest::sha256(),Self::len()/8)
     }
     fn len() -> usize {
