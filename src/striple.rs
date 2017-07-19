@@ -1,7 +1,11 @@
 
 
+
+#[cfg(feature="serialize")]
+use base64::STANDARD as BASE64CONF;
 use std::error::Error as ErrorTrait;
 use std::io::Error as IOError;
+use serde::de::Error as SerdeError;
 use std::env::VarError;
 use std::fmt::{Display,Debug,Formatter};
 use std::fmt::Result as FmtResult;
@@ -29,11 +33,9 @@ const CONTENT_LENGTH_COPYTRESHOLD : usize = 512;
 const MAX_ALLOC_SIZE : usize = 30000;
 
 #[cfg(feature="serialize")]
-use rustc_serialize::{Encoder,Encodable,Decoder,Decodable};
+use serde::{Serializer,Serialize,Deserialize,Deserializer};
 #[cfg(feature="serialize")]
-use rustc_serialize::base64::ToBase64;
-#[cfg(feature="serialize")]
-use rustc_serialize::base64;
+use base64;
 
  
 pub type Result<R> = StdResult<R,Error>;
@@ -126,6 +128,16 @@ pub enum BCont<'a> {
   NotOwnedBytes(&'a[u8]),
   LocalPath(PathBuf),
 }
+/*  ttimpl<'a> convert::AsRef<[u8]> for BCont<'a> {
+  fn(&Self) -> &[u8] {
+    match Self {
+     OwnedBytes(ref v) => &v[..],
+     NotOwnedBytes(ref a) => *a,
+     LocalPath(ref pb) => ,
+
+    }
+  }
+}*/
 pub enum BContRead<'a> {
   Bytes(Cursor<&'a[u8]>),
   LocalPath(File),
@@ -965,8 +977,8 @@ impl<'a, T : StripleKind> AsStriple<'a, T> for Striple<T> {
 #[cfg(feature="serialize")]
 /// Most of the time serialize is use on another struct (implementing `AsStriple` trait), this only represent the serialization of
 /// the byte form of an striple
-impl<T : StripleKind> Encodable for Striple<T> {
-  fn encode<S:Encoder> (&self, s: &mut S) -> StdResult<(), S::Error> {
+impl<T : StripleKind> Serialize for Striple<T> {
+  fn serialize<S:Serializer>(&self, s: S) -> StdResult<S::Ok, S::Error> {
     let (mut v, ocon) = match self.striple_ser() {
       Ok(a) => a,
       Err(_) => 
@@ -977,7 +989,7 @@ impl<T : StripleKind> Encodable for Striple<T> {
         match bcon.get_byte() {
           Ok(mut vcon) => {
             v.append(&mut vcon);
-            v.encode(s)
+            v.serialize(s)
           },
           Err(_) => {
             // TODO follow this https://github.com/rust-lang/rustc-serialize/issues/76 -> TODO
@@ -987,21 +999,21 @@ impl<T : StripleKind> Encodable for Striple<T> {
           }
         }
       },
-      None => v.encode(s),
+      None => v.serialize(s),
     }
   }
 }
 
 // TODO test on this (not good)
 #[cfg(feature="serialize")]
-impl<T : StripleKind> Decodable for Striple<T> {
-  fn decode<D:Decoder> (d : &mut D) -> StdResult<Striple<T>, D::Error> {
-    let tmpres = Vec::decode(d);
+impl<'de,T : StripleKind> Deserialize<'de> for Striple<T> {
+  fn deserialize<D:Deserializer<'de>>(d: D) -> StdResult<Striple<T>, D::Error> {
+    let tmpres = Vec::deserialize(d);
     // Dummy type
     let typednone : Option<&Striple<T>> = None;
     tmpres.and_then(|vec| 
       striple_dser(&vec, None, typednone, ref_builder_id_copy).map_err(|err|
-        d.error(&format!("{:?}",err))
+        <D::Error as SerdeError>::custom(&format!("{:?}",err))
       )
     )
   }
@@ -1940,22 +1952,22 @@ pub struct UnsafeOwnedStripleDisp<'a, S : 'a + OwnedStripleIf>(pub &'a S);
 impl<'a,  S : StripleIf> Display for StripleDisp<'a, S> {
   fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
     ftr.debug_struct("")
-    .field("id", &self.0.get_id().to_base64(BASE64CONF))
-    .field("from", &self.0.get_from().to_base64(BASE64CONF))
-    .field("about", &self.0.get_about().to_base64(BASE64CONF))
+    .field("id", &base64::encode_config(self.0.get_id(),BASE64CONF))
+    .field("from", &base64::encode_config(self.0.get_from(),BASE64CONF))
+    .field("about", &base64::encode_config(self.0.get_about(),BASE64CONF))
     .field("content_ids", &{
       let mut catids = "[".to_string();
       for id in self.0.get_content_ids().iter() {
-        catids = catids + &id.to_base64(BASE64CONF)[..] + ",";
+        catids = catids + &base64::encode_config(id,BASE64CONF)[..] + ",";
       }
       catids + "]"
       }
     )
-    .field("content", &truncated_content(self.0.get_content()).to_base64(BASE64CONF))
+    .field("content", &base64::encode_config(&truncated_content(self.0.get_content())[..],BASE64CONF))
     .field("content_string", &String::from_utf8(truncated_content(self.0.get_content()).to_vec()))
-    .field("key", &self.0.get_key().to_base64(BASE64CONF))
-    .field("sig", &self.0.get_sig().to_base64(BASE64CONF))
-    .field("kind ", &self.0.get_algo_key().to_base64(BASE64CONF))
+    .field("key", &base64::encode_config(self.0.get_key(),BASE64CONF))
+    .field("sig", &base64::encode_config(self.0.get_sig(),BASE64CONF))
+    .field("kind ", &base64::encode_config(self.0.get_algo_key(),BASE64CONF))
     .finish()
 
   }
@@ -1997,16 +2009,16 @@ impl<'a, S : OwnedStripleIf> Display  for UnsafeOwnedStripleDisp<'a,S> {
   fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
     ftr.debug_struct("")
     .field("striple", &format!("{}",StripleDisp(self.0)))
-    .field("PrivateKey", &self.0.private_key_ref().to_base64(BASE64CONF))
+    .field("PrivateKey", &base64::encode_config(self.0.private_key_ref(),BASE64CONF))
     .finish()
   }
 }
 
-#[cfg(feature="serialize")]
+/*#[cfg(feature="serialize")]
 pub static BASE64CONF : base64::Config = base64::Config {
     char_set : base64::CharacterSet::Standard,
-    newline : base64::Newline::LF,
+    strip_whitespace : false,
     pad : true,
-    line_length : None,
-};
+    line_wrap : base64::LineWrap::NoWrap,
+};*/
 

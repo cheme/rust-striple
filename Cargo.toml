@@ -20,7 +20,7 @@ default = ["public_crypto","serialize","public_openssl","cryptoecdsa","opensslrs
 #default = ["public_crypto","serialize","cryptoecdsa","for_c"]
 #default = ["serialize","public_openssl","opensslrsa","opensslpbkdf2","for_c"]
 #default = []
-serialize = ["rustc-serialize","serde"]
+serialize = ["serde_derive","serde","base64"]
 opensslrsa = ["openssl"]
 opensslpbkdf2 = ["openssl"]
 cryptoecdsa = ["rust-crypto"]
@@ -47,12 +47,18 @@ lazy_static = "0.2.8"
 num = "0.1.37"
 rand = "0.3.15"
 
-[dependencies.rustc-serialize]
-version = "0.3.24"
-optional = true
 [dependencies.serde]
-version = "1.0.7"
+version = "1.0.10"
 optional = true
+[dependencies.serde_derive]
+version = "1.0.10"
+optional = true
+
+
+[dependencies.base64]
+version = "0.6.0"
+optional = true
+
 
 
 [dependencies.openssl]
@@ -73,9 +79,9 @@ version = "0.2.23"
 optional = true
 
 #[dev-dependencies.docopt_macros]
-#version = "0.7.0"
+#version = "0.8.1"
 [dev-dependencies.docopt]
-version = "0.7.0"
+version = "0.8.1"
 
 [dev-dependencies.env_logger]
 version = "0.4.2"

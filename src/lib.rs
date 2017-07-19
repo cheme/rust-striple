@@ -18,7 +18,10 @@
 extern crate num;
 
 #[cfg(feature="serialize")]
-extern crate rustc_serialize;
+extern crate serde;
+
+#[cfg(feature="serialize")]
+extern crate base64;
 
 #[cfg(feature="for_c")]
 extern crate libc;

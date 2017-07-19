@@ -20,15 +20,11 @@ extern crate docopt;
 extern crate striple;
 extern crate num;
 #[cfg(feature="serialize")]
-extern crate rustc_serialize;
+extern crate base64;
 extern crate env_logger;
 
 use docopt::Docopt;
 use std::env::args;
-#[cfg(feature="serialize")]
-use rustc_serialize::base64::ToBase64;
-#[cfg(feature="serialize")]
-use rustc_serialize::base64::FromBase64;
 use std::fs::{File,OpenOptions};
 use std::fs;
 use std::path;
@@ -36,7 +32,11 @@ use std::io::{Read,Write,Seek,SeekFrom};
 use striple::anystriple::{AnyStriple, copy_builder_any};
 use striple::striple::{BCont,NoKind,StripleDisp,StripleIf,OwnedStripleIf,StripleRef};
 #[cfg(feature="serialize")]
-use striple::striple::BASE64CONF;
+#[macro_use]
+extern crate serde_derive;
+#[cfg(feature="serialize")]
+use base64::STANDARD as BASE64CONF;
+//use striple::striple::BASE64CONF;
 use striple::striple::Error as StripleError;
 use striple::storage::{FileMode,FileStripleIterator,write_striple,AnyCyphers};
 #[cfg(feature="opensslpbkdf2")]
@@ -96,7 +96,7 @@ fn run() {
 }
 
 #[cfg(feature="serialize")]
-#[derive(RustcDecodable,Debug)]
+#[derive(Debug,Deserialize)]
 struct Args {
   arg_fromfile : String,
   arg_frompass : String,
@@ -147,7 +147,7 @@ fn run() {
 
 // Parse argv and exit the program with an error message if it fails.
   let args : Args = Docopt::new(USAGE)
-                        .and_then(|d| d.argv(args().into_iter()).decode())
+                        .and_then(|d| d.argv(args().into_iter()).deserialize())
                         .unwrap_or_else(|e| e.exit());
    /* Docopt::new(USAGE)
                   .and_then(|d| d.argv(args().into_iter()).parse())
@@ -193,23 +193,23 @@ fn run() {
      //id64
     let s : Result<(AnyStriple,Option<Vec<u8>>),_> = it.get(ix - 1);
      match (args.cmd_from, args.cmd_about, args.cmd_content,args.cmd_kind,args.cmd_enc) {
-       (true,_,_,_,_) => print!("{}", s.unwrap().0.get_from().to_vec().to_base64(BASE64CONF)),
-       (_,true,_,_,_) => print!("{}", s.unwrap().0.get_about().to_vec().to_base64(BASE64CONF)),
+       (true,_,_,_,_) => print!("{}", base64::encode_config(&s.unwrap().0.get_from().to_vec(),BASE64CONF)),
+       (_,true,_,_,_) => print!("{}", base64::encode_config(&s.unwrap().0.get_about().to_vec(),BASE64CONF)),
        (_,_,true,_,_) => {
          let ids : Vec<&[u8]> = s.as_ref().unwrap().0.get_content_ids();
          if args.flag_ix.len() > 1 {
            if ids.len() > args.flag_ix[1] {
-             print!("{}", ids[args.flag_ix[1]].to_vec().to_base64(BASE64CONF))
+             print!("{}", base64::encode_config(&ids[args.flag_ix[1]].to_vec(),BASE64CONF))
            }
          } else {
            if ids.len() > 0 {
-             print!("{}", ids[0].to_vec().to_base64(BASE64CONF))
+             print!("{}", base64::encode_config(&ids[0].to_vec(),BASE64CONF))
            }
          }
        },
-       (_,_,_,true,_) => print!("{}", s.unwrap().0.get_algo_key().to_vec().to_base64(BASE64CONF)),
-       (_,_,_,_,true) => print!("{}", s.unwrap().0.get_enc().to_vec().to_base64(BASE64CONF)),
-       _ => print!("{}", s.unwrap().0.get_id().to_vec().to_base64(BASE64CONF)),
+       (_,_,_,true,_) => print!("{}", base64::encode_config(&s.unwrap().0.get_algo_key().to_vec(),BASE64CONF)),
+       (_,_,_,_,true) => print!("{}", base64::encode_config(&s.unwrap().0.get_enc().to_vec(),BASE64CONF)),
+       _ => print!("{}", base64::encode_config(&s.unwrap().0.get_id().to_vec(),BASE64CONF)),
      }
   },
 
@@ -294,7 +294,8 @@ fn run() {
 
    let mut ixnb = 0;
    let encid = if args.flag_encid {
-    args.arg_encid.from_base64().unwrap()
+
+    base64::decode_config(&args.arg_encid,BASE64CONF).unwrap()
    } else {
      if args.flag_encfile {
      let encfile = File::open(&args.arg_encfile).unwrap();
@@ -307,7 +308,7 @@ fn run() {
      }
    };
    let kindid = if args.flag_kindid {
-    args.arg_kindid.from_base64().unwrap()
+    base64::decode_config(&args.arg_kindid,BASE64CONF).unwrap()
    } else {
      let kindfile = File::open(&args.arg_kindfile).unwrap();
      let mut kindit = FileStripleIterator::init(kindfile, copy_builder_any, &init_noread_key, ()).unwrap();
@@ -321,7 +322,7 @@ fn run() {
    }else{0};
 
    let aboutid = if args.flag_aboutid {
-    Some(args.arg_aboutid.from_base64().unwrap())
+    Some(base64::decode_config(&args.arg_aboutid,BASE64CONF).unwrap())
    } else {
      if args.flag_aboutfile {
      let aboutfile = File::open(&args.arg_aboutfile).unwrap();
@@ -334,7 +335,7 @@ fn run() {
      }
    };
 
-   let contentids = args.flag_contentid.iter().map(|c|c.from_base64().unwrap()).collect();
+   let contentids = args.flag_contentid.iter().map(|c|base64::decode_config(&c,BASE64CONF).unwrap()).collect();
 
    let content = if args.flag_contentfile {
      // TODO add option to get BCont file instead of load
@@ -354,7 +355,7 @@ fn run() {
      }
    } else {
      if args.flag_content.len() > 0 {
-       Some(BCont::OwnedBytes(args.flag_content.from_base64().unwrap()))
+       Some(BCont::OwnedBytes(base64::decode_config(&args.flag_content,BASE64CONF).unwrap()))
      } else {
        None
      }
@@ -405,7 +406,7 @@ fn run() {
      copy_vec_oriter(&args, contents, None);
    } else {
      // out on stdout as base64 : key then striple
-     println!("{}", owned_striple.1.to_base64(BASE64CONF));
+     println!("{}", base64::encode_config(&owned_striple.1,BASE64CONF));
      let mut sser = owned_striple.0.striple_ser().unwrap();
      match &sser.1 {
        &Some(ref bcon)=> {
@@ -414,7 +415,7 @@ fn run() {
        },
        &None => (),
      };
-     print!("{}", sser.0.to_base64(BASE64CONF));
+     print!("{}", base64::encode_config(&sser.0,BASE64CONF));
      
    }
   }
@@ -534,7 +535,7 @@ fn pbkcyph(f : String) -> AnyCyphers {
     AnyCyphers::Pbkdf2( initpkbdf2(f))
 }
 #[cfg(not(feature="pbkdf2"))]
-fn pbkcyph(f : String) -> AnyCyphers {
+fn pbkcyph(_ : String) -> AnyCyphers {
    panic!("Rust striple compiled without pbkdf2")
 }
 
