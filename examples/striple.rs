@@ -161,7 +161,7 @@ fn run() {
     println!("Reading form piped input not implemented yet");
     return()
   };
-  let rit :  Result<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_>  = if args.flag_inpass.len() > 0 {
+  let rit :  Result<FileStripleIterator<NoKind,_,_,_>,_>  = if args.flag_inpass.len() > 0 {
     FileStripleIterator::init(readseek, copy_builder_any, &init_any_cypher_with_pass, args.flag_inpass.clone())
   } else {
     FileStripleIterator::init(readseek, copy_builder_any, &init_any_cipher_stdin, ())
@@ -491,7 +491,7 @@ fn parse_cmd_filemode(arg : &Args) -> FileMode {
   FileMode::Idem
 }
 #[cfg(feature="serialize")]
-fn copy_iter<B> (args : &Args, it :FileStripleIterator<NoKind, AnyStriple, File, AnyCyphers, B>)
+fn copy_iter<B> (args : &Args, it :FileStripleIterator<NoKind, File, AnyCyphers, B>)
 where B :  Fn(&[u8], StripleRef<NoKind>) -> StdResult<AnyStriple, StripleError>
 { 
   let fm = parse_cmd_filemode(args);
@@ -499,7 +499,7 @@ where B :  Fn(&[u8], StripleRef<NoKind>) -> StdResult<AnyStriple, StripleError>
   fs::copy(&args.flag_out, args.flag_out.clone() + "_").unwrap();
   let initiallen = out.metadata().unwrap().len();
   if initiallen > 0 {
-    let rot : Result<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_>  = if args.flag_outpass.len() > 0 {
+    let rot : Result<FileStripleIterator<NoKind,_,_,_>,_>  = if args.flag_outpass.len() > 0 {
       FileStripleIterator::init(out, copy_builder_any, &init_any_cypher_with_pass, args.flag_outpass.clone())
     } else {
       FileStripleIterator::init(out, copy_builder_any, &init_any_cipher_stdin, ())
@@ -547,7 +547,7 @@ fn copy_vec_oriter (args : &Args, contents : Vec<(AnyStriple,Option<Vec<u8>>)>, 
     fs::copy(&args.flag_out, args.flag_out.clone() + "_").unwrap();
     let initiallen = out.metadata().unwrap().len();
     if initiallen > 0 {
-      let rot : Result<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_>  = if args.flag_outpass.len() > 0 {
+      let rot : Result<FileStripleIterator<NoKind,_,_,_>,_>  = if args.flag_outpass.len() > 0 {
          FileStripleIterator::init(out, copy_builder_any, &init_any_cypher_with_pass, args.flag_outpass.clone())
       } else {
          FileStripleIterator::init(out, copy_builder_any, &init_any_cipher_stdin, ())

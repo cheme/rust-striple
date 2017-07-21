@@ -18,7 +18,7 @@ use striple::storage::Pbkdf2;
 /// Plus write base file without password or with encrypted password.
 fn main() {
   let datafile = File::open("./baseperm.data").unwrap();
-  let rit : Result<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_> = FileStripleIterator::init(datafile, copy_builder_any, &init_any_cipher_stdin, ()); 
+  let rit : Result<FileStripleIterator<NoKind,_,_,_>,_> = FileStripleIterator::init(datafile, copy_builder_any, &init_any_cipher_stdin, ()); 
   let striples : Vec<(AnyStriple,Option<Vec<u8>>)> = rit.unwrap().collect();
 
   // Doing some check based upon knowned structure

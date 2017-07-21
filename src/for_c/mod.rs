@@ -38,7 +38,7 @@ pub struct either_owned {
 }
 
 
-pub type CIfIter = FileStripleIterator<NoKind,AnyStriple,File,AnyCyphers,fn(&[u8], StripleRef<NoKind>) -> Result<AnyStriple, Error> >;
+pub type CIfIter = FileStripleIterator<NoKind,File,AnyCyphers,fn(&[u8], StripleRef<NoKind>) -> Result<AnyStriple, Error> >;
 
 // TODO find a way to get rid of this useless B (refact api?to trait param)
 //#[repr(C)]

@@ -41,13 +41,13 @@ use anystriple::PubSha256;
   // TODO key in share location + true striple!!!
 /// reference to base_striple of lib
 #[derive(Debug,Clone)]
-pub struct BaseStriples<K : StripleKind + Sized> {
+pub struct BaseStriples<K> {
   pub root : (Striple<K>, Vec<u8>),
   pub libcat : (Striple<K>, Vec<u8>),
   pub libkind : (Striple<K>, Vec<u8>),
 }
 #[derive(Debug,Clone)]
-pub struct KindStriples<K : StripleKind + Sized>{
+pub struct KindStriples<K>{
   pub kind : (Striple<K>, Vec<u8>),
   pub pubripemd : (Striple<K>, Vec<u8>),
   pub pubsha512 : (Striple<K>, Vec<u8>),
@@ -152,7 +152,7 @@ pub fn init_kind_striple_ids () -> Result<KindStriplesIDs> {
   let path = from_error(env::var("STRIPLE_BASE"))?;
   let datafile = from_error(File::open(path))?;
   // get striple without key and without Kind (as we define it)
-  let rit : StdResult<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>,_> = FileStripleIterator::init(datafile, ref_builder_id_copy , &init_noread_key, ());
+  let rit : StdResult<FileStripleIterator<NoKind,_,_,_>,_> = FileStripleIterator::init(datafile, ref_builder_id_copy , &init_noread_key, ());
   let mut it = rit?;
   for _ in 0..6 {
     it.skip_striple()?;

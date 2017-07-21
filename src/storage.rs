@@ -756,14 +756,13 @@ pub fn init_any_cipher_stdin<R: Read> (file : &mut R, _ : ()) -> Result<AnyCyphe
 
 
 // TODO switch to associated types
-pub struct FileStripleIterator<SK : StripleKind, T : StripleIf, R : Read + Seek, C : StorageCypher, B> (pub R, pub C, pub B, PhantomData<SK>, pub u64)
-  where B : Fn(&[u8], StripleRef<SK>) -> Result<T>;
+pub struct FileStripleIterator<SK, R, C, B> (pub R, pub C, pub B, PhantomData<SK>, pub u64);
   //where B : Fn(&[u8], Striple<SK>) -> Result<T, StripleError>;
 
-impl<SK : StripleKind, T : StripleIf, R : Read + Seek, B, C : StorageCypher> FileStripleIterator<SK, T, R, C, B>
+impl<SK : StripleKind, T : StripleIf, R : Read + Seek, B, C : StorageCypher> FileStripleIterator<SK, R, C, B>
   where B : Fn(&[u8], StripleRef<SK>) -> Result<T> {
 
-  pub fn init<IC, P> (mut file :  R, cbuilder : B, initcypher : IC, extra : P)  -> Result<FileStripleIterator<SK, T, R, C, B>>
+  pub fn init<IC, P> (mut file :  R, cbuilder : B, initcypher : IC, extra : P)  -> Result<FileStripleIterator<SK, R, C, B>>
     where IC : Fn(&mut R, P) -> Result<C> {
     try!(file.seek(SeekFrom::Start(0)));
     let cyph = initcypher(&mut file, extra);
@@ -883,7 +882,7 @@ pub fn recode_entry<C1 : StorageCypher, C2 : StorageCypher> (entrybytes : &[u8],
 
 }
 
-impl<SK : StripleKind, T : StripleIf, R : Read + Seek, B, C : StorageCypher> Iterator for FileStripleIterator<SK, T, R, C, B>
+impl<SK : StripleKind, T : StripleIf, R : Read + Seek, B, C : StorageCypher> Iterator for FileStripleIterator<SK, R, C, B>
   where B : Fn(&[u8], StripleRef<SK>) -> Result<T> {
   type Item = (T,Option<Vec<u8>>);
 
@@ -1014,7 +1013,7 @@ pub mod test {
     vecst.push((&striple2,Some(&pkey[..])));
     let wr = write_striple_file_ref(&NoCypher, &mut vecst.iter().map(|p|(p.0,p.1)), &FileMode::NoFile, &mut buf);
     assert!(wr.is_ok());
-    let rit : Result<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>> = FileStripleIterator::init(buf, ref_builder_id_copy, init_any_cypher_with_pass, "pass".to_string()); 
+    let rit : Result<FileStripleIterator<NoKind,_,_,_>> = FileStripleIterator::init(buf, ref_builder_id_copy, init_any_cypher_with_pass, "pass".to_string()); 
     assert!(rit.is_ok());
     let mut it = rit.unwrap();
  

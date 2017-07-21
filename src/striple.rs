@@ -377,7 +377,7 @@ impl<S : PubStriple> OwnedStripleIf for S {
 
 /// Striple struct object to manipulate an striple
 #[derive(Debug,Clone)]
-pub struct Striple<T : StripleKind> {
+pub struct Striple<T> {
   /// id of the striple defining the encoding of the content
   /// optional (null vec otherwhise)
   pub contentenc : Vec<u8>,
@@ -403,7 +403,7 @@ pub struct Striple<T : StripleKind> {
 /// Striple struct object to use striple functionality from other existing struct by using
 /// reference only. For field definition please refer to `Striple`
 #[derive(Debug,Clone)]
-pub struct StripleRef<'a, T : StripleKind> {
+pub struct StripleRef<'a, T> {
   contentenc : &'a[u8],
   id         : &'a[u8],
   from       : &'a[u8],
@@ -1941,10 +1941,10 @@ pub mod test {
 
 }
 
-pub struct StripleDisp<'a, S : 'a + StripleIf>(pub &'a S);
-pub struct OwnedStripleDisp<'a, S : 'a + OwnedStripleIf>(pub &'a S);
+pub struct StripleDisp<'a, S : 'a>(pub &'a S);
+pub struct OwnedStripleDisp<'a, S : 'a>(pub &'a S);
 // TODO mark as rust unsafe?? (more lib unsafe)
-pub struct UnsafeOwnedStripleDisp<'a, S : 'a + OwnedStripleIf>(pub &'a S);
+pub struct UnsafeOwnedStripleDisp<'a, S : 'a>(pub &'a S);
 
 
 

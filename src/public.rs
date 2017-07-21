@@ -20,7 +20,7 @@ pub trait CHash : Debug + Clone {
 }
 
 #[derive(Debug,Clone)]
-pub struct PubSign<H : CHash>(PhantomData<H>);
+pub struct PubSign<H>(PhantomData<H>);
 
 /// generic public signature scheme
 impl<H : CHash> SignatureScheme for PubSign<H> {
