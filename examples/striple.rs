@@ -468,7 +468,7 @@ fn initpkbdf2 (outpass : String) -> Pbkdf2 {
         pass.pop();
         pass
         };
-        Pbkdf2::new(pass,2000,None).unwrap()
+        Pbkdf2::new(pass,2000,Pbkdf2::gen_salt().unwrap()).unwrap()
 
 }
 
@@ -530,11 +530,11 @@ where B :  Fn(&[u8], StripleRef<NoKind>) -> StdResult<AnyStriple, StripleError>
   };
 }
 
-#[cfg(feature="pbkdf2")]
+#[cfg(feature="opensslpbkdf2")]
 fn pbkcyph(f : String) -> AnyCyphers {
     AnyCyphers::Pbkdf2( initpkbdf2(f))
 }
-#[cfg(not(feature="pbkdf2"))]
+#[cfg(not(feature="opensslpbkdf2"))]
 fn pbkcyph(_ : String) -> AnyCyphers {
    panic!("Rust striple compiled without pbkdf2")
 }

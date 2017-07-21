@@ -10,6 +10,7 @@ extern crate openssl;
 
 extern crate rand;
 
+use std::cmp::{min};
 use std::fmt::{Debug};
 use std::iter::Iterator;
 use std::io::{Read,Write,Seek,SeekFrom,Error,ErrorKind};
@@ -167,7 +168,9 @@ impl Debug for Pbkdf2 {
       .field("pass", &"******")
       .field("iter", &self.iter)
       .field("keylength", &self.keylength)
+      .field("ivlength", &self.ivlength)
       .field("salt", &self.salt)
+//      .field("keytodel", &self.key)
       .finish()
  
     }
@@ -179,31 +182,32 @@ fn read_pbkdf2_header<R : Read> (file : &mut R) -> Result<(usize,usize,Vec<u8>)>
   let mut salt = vec![0; saltlength];
   try!(file.read(&mut salt));
   Ok((iter,saltlength,salt))
+    /*
+     *    let mut res = xtendsize(self.get_id_val(),CIPHTYPE_LENGTH);
+    res.append(&mut xtendsize(self.iter,PKITER_LENGTH));
+    res.append(&mut xtendsize(self.keylength,PKKS_LENGTH));
+    res.append(&mut self.salt.to_vec());*/
+ 
 }
 
 
 #[cfg(feature="opensslpbkdf2")]
 impl Pbkdf2 {
-  /// Pbkdf2 param in header
-  #[inline]
-  fn read_pbkdf2_header<R : Read> (file : &mut R) -> Result<(usize,usize,Vec<u8>)> {
-    read_pbkdf2_header(file)
-  }
-
-  pub fn new (pass : String, iter : usize, osalt : Option<Vec<u8>>) -> Result<Pbkdf2> {
+  pub fn gen_salt() -> Result<Vec<u8>> {
     let cipher = Cipher::aes_256_cbc();
-    let kl = 256 / 8;
-    let ivl = kl / 2;
-    let salt = match osalt {
-      Some(s) => s,
-      None => {
-        // gen salt
-        let mut rng = OsRng::new()?;
-        let mut s = vec![0; ivl];
-        rng.fill_bytes(&mut s);
-        s
-      },
-    };
+    let kl = cipher.key_len();
+    let ivl = cipher.iv_len().unwrap_or(0);
+ 
+    // gen salt
+    let mut rng = OsRng::new()?;
+    let mut s = vec![0; ivl];
+    rng.fill_bytes(&mut s);
+    Ok(s)
+  }
+  pub fn new (pass : String, iter : usize, salt : Vec<u8>) -> Result<Pbkdf2> {
+    let cipher = Cipher::aes_256_cbc();
+    let kl = cipher.key_len();
+    let ivl = cipher.iv_len().unwrap_or(0);
     let mut key = vec![0;kl];
     pbkdf2_hmac (
        &pass.into_bytes()[..], 
@@ -233,7 +237,7 @@ impl StorageCypher for Pbkdf2 {
   fn get_cypher_header (&self) -> Vec<u8> {
     let mut res = xtendsize(self.get_id_val(),CIPHTYPE_LENGTH);
     res.append(&mut xtendsize(self.iter,PKITER_LENGTH));
-    res.append(&mut xtendsize(self.keylength,PKKS_LENGTH));
+    res.append(&mut xtendsize(self.salt.len(),PKKS_LENGTH));
     res.append(&mut self.salt.to_vec());
     res
   }
@@ -241,28 +245,34 @@ impl StorageCypher for Pbkdf2 {
   fn encrypt (&self, pk : &[u8]) -> Result<Vec<u8>> {
     // gen salt
     let mut rng = OsRng::new()?;
-    //let mut iv = vec![0; self.keylength];
-    let mut buff = vec![0; self.keylength];
+    let buflen = self.cipher.block_size();
+    let mut buff = vec![0; buflen + self.cipher.block_size()];
  
     rng.fill_bytes(&mut buff[..self.ivlength]);
 //    self.crypter.init(Mode::Encrypt,&self.key[..],iv.clone());
     let mut crypter = Crypter::new(
       self.cipher,
+      //Cipher::aes_256_cbc(),
       Mode::Encrypt, 
       &self.key[..],
       Some(&buff[..self.ivlength])
+      //Some(&self.salt[..self.ivlength])
     )?;
     crypter.pad(true);
-    let mut result = Vec::with_capacity(self.ivlength + self.keylength);
+    let mut result = Vec::new();
+    //let mut result = Vec::with_capacity(self.ivlength + self.keylength);
     result.extend_from_slice(&buff[..self.ivlength]);
     let mut to_enc = &pk[..];
-    while to_enc.len() > 0 {
-      let i = crypter.update(to_enc, &mut buff)?;
-      to_enc = &to_enc[i..];
+    while {
+      let insize = min(to_enc.len(),buflen);
+      let i = crypter.update(&to_enc[..insize], &mut buff)?;
+      to_enc = &to_enc[insize..];
       result.extend_from_slice(&buff[..i]);
-    }
+      to_enc.len() > 0
+    } {};
     let i = crypter.finalize(&mut buff)?;
     result.extend_from_slice(&buff[..i]);
+
     Ok(result)
   }
   // TODO no way of knowing if decrypt fail until trying to sign
@@ -270,26 +280,35 @@ impl StorageCypher for Pbkdf2 {
   //
   fn decrypt (&self, pk : &[u8]) -> Result<Vec<u8>> {
     let iv = &pk[..self.ivlength];
+//    let iv = &self.salt[..self.ivlength];
     let enc = &pk[self.ivlength..];
     let mut crypter = Crypter::new(
       self.cipher, 
+      //Cipher::aes_256_cbc(),
       Mode::Decrypt, 
       &self.key[..],
       Some(&iv[..])
     )?;
     crypter.pad(true);
-    let mut buff = vec![0; self.keylength];
+    let buflen = self.cipher.block_size();
+    let mut buff = vec![0; buflen + self.cipher.block_size()];
     let mut result = Vec::new();
-    let mut to_dec = enc;
+    //let mut to_dec = enc;
+    let mut to_dec = &enc[..];
     while {
-      let i = crypter.update(to_dec, &mut buff)?;
-      to_dec = &to_dec[i..];
+      let insize = min(to_dec.len(),buflen);
+      let i = crypter.update(&to_dec[..insize], &mut buff)?;
+      to_dec = &to_dec[insize..];
       result.extend_from_slice(&buff[..i]);
-      i > 0
-    } {}
+      to_dec.len() > 0
+    } {};
+    let i = crypter.finalize(&mut buff)?;
+    result.extend_from_slice(&buff[..i]);
+ 
     Ok(result)
   }
 }
+
 
 impl StorageCypher for RemoveKey {
   #[inline]
@@ -354,7 +373,9 @@ fn writebcontheader(cont : &[u8], fm : &FileMode, dest : &mut Write) -> Result<b
       otresh.map(|ref tresh|{
         if cont.len() > *tresh {
           let path = try!(writetorandfile(cont,dest));
-          let pathb = path.as_bytes(); try!(dest.write(&[STRIPLE_TAG_FILE])); try!(dest.write(&xtendsize(pathb.len(),STORAGEPATH_LENGTH)));
+          let pathb = path.as_bytes(); 
+          try!(dest.write(&[STRIPLE_TAG_FILE])); 
+          try!(dest.write(&xtendsize(pathb.len(),STORAGEPATH_LENGTH)));
           try!(dest.write(pathb));
           Ok(false)
         } else {
@@ -536,11 +557,14 @@ pub fn read_striple
    T  : StripleIf,
    R  : Read,
    B,
-    > (cypher : &SC, from : &mut R, copy_builder : B) -> Result<(T,Option<Vec<u8>>)>
+    > (cypher : &SC, from : &mut R, copy_builder : B) -> Result<Option<(T,Option<Vec<u8>>)>>
   where B : Fn(&[u8], StripleRef<SK>) -> Result<T> {
 
-  let tag = &mut [0];
-  try!(from.read(tag));
+  let tag = &mut [STRIPLE_TAG_BYTE];
+
+  if from.read(tag)? == 0 {
+    return Ok(None)
+  }
   let bcon = match tag[0] {
     STRIPLE_TAG_BYTE => {
       None
@@ -580,7 +604,7 @@ pub fn read_striple
   debug!("in st : {:?}", st);
   let typednone : Option<&T> = None;
 
-  striple_dser(&st[..], bcon, typednone, copy_builder).map(|s|(s,mpkey))
+  striple_dser(&st[..], bcon, typednone, copy_builder).map(|s|Some((s,mpkey)))
 }
 
 /*
@@ -691,8 +715,8 @@ pub fn init_any_cipher_stdin<R: Read> (file : &mut R, _ : ()) -> Result<AnyCyphe
         // remove terminal \n
         pass.pop();
  
-        let (iter, _, salt) = try!(Pbkdf2::read_pbkdf2_header (file));
-        let pbk = Pbkdf2::new(pass,iter,Some(salt))?;
+        let (iter, _, salt) = try!(read_pbkdf2_header (file));
+        let pbk = Pbkdf2::new(pass,iter,salt)?;
         Ok(AnyCyphers::Pbkdf2(pbk))
       },
       _ => Err(StripleError("Non supported cypher type".to_string(), StripleErrorKind::KindImplementationNotFound, None)),
@@ -712,8 +736,8 @@ pub fn init_any_cypher_with_pass<R: Read> (file : &mut R, pass : String) -> Resu
   match idcypher {
       0 => Ok(AnyCyphers::NoCypher(NoCypher)),
       1 => {
-        let (iter, _, salt) = try!(Pbkdf2::read_pbkdf2_header (file));
-        let pbk = Pbkdf2::new(pass,iter,Some(salt))?;
+        let (iter, _, salt) = try!(read_pbkdf2_header (file));
+        let pbk = Pbkdf2::new(pass,iter,salt)?;
         Ok(AnyCyphers::Pbkdf2(pbk))
       },
       _ => Err(StripleError("Non supported cypher type".to_string(), StripleErrorKind::KindImplementationNotFound, None)),
@@ -755,9 +779,12 @@ impl<SK : StripleKind, T : StripleIf, R : Read + Seek, B, C : StorageCypher> Fil
       try!(self.skip_striple());
     }
 
-    let res = read_striple::<_,SK,_,_,_>(&self.1, &mut self.0, &self.2);
-    try!(self.0.seek(SeekFrom::Start(posstart)));
-    res
+    let res = read_striple::<_,SK,_,_,_>(&self.1, &mut self.0, &self.2)?;
+    self.0.seek(SeekFrom::Start(posstart))?;
+    match res {
+      Some(r) => Ok(r),
+      None => Err(StripleError("could not reach ix".to_string(), StripleErrorKind::MissingIx,None)),
+    }
   }
 
 pub fn skip_striple (&mut self) -> IOResult<()> {
@@ -820,7 +847,7 @@ pub fn skip_striple (&mut self) -> IOResult<()> {
 /// copying, to an other file : untested
 pub fn recode_entry<C1 : StorageCypher, C2 : StorageCypher> (entrybytes : &[u8], from : &C1, to : &C2) -> Result<Vec<u8>> {
   let mut entry = Cursor::new(entrybytes);
-  let tag = &mut [0];
+  let tag = &mut [STRIPLE_TAG_BYTE];
   entry.read(tag)?;
   let head = match tag[0] {
     STRIPLE_TAG_BYTE => {
@@ -830,7 +857,7 @@ pub fn recode_entry<C1 : StorageCypher, C2 : StorageCypher> (entrybytes : &[u8],
       let s = xtendsizeread_foralloc(&mut entry, STORAGEPATH_LENGTH)?;
       Some(s)
     },
-    _ => return Err(StripleError("Unknown striple tag".to_string(), StripleErrorKind::KindImplementationNotFound, None)),
+    _ => return Err(StripleError("Unknown striple tag(recode)".to_string(), StripleErrorKind::KindImplementationNotFound, None)),
   };
  
   let privsize = xtendsizeread_foralloc(&mut entry, STORAGEPK_LENGTH)?;
@@ -865,7 +892,7 @@ impl<SK : StripleKind, T : StripleIf, R : Read + Seek, B, C : StorageCypher> Ite
     let res = read_striple::<_,SK,_,_,_>(&self.1, &mut self.0, &self.2);
     println!("{:?}",res);
         
-    res.ok()
+    res.unwrap_or(None)
   }
 }
 
@@ -880,6 +907,7 @@ impl<SK : StripleKind, T : StripleIf, R : Read + Seek, B, C : StorageCypher> Ite
 
 #[cfg(test)]
 pub mod test {
+
   use striple::Striple;
 //  use striple::copy_builder_id;
   use striple::ref_builder_id_copy;
@@ -888,6 +916,29 @@ pub mod test {
   use storage::{FileMode,NoCypher,write_striple,read_striple,write_striple_file_ref,FileStripleIterator,init_any_cypher_with_pass};
   use striple::test::{sample_striple1,sample_striple2,sample_striple3,sample_striple4,random_bytes,compare_striple};
   use std::io::{Cursor,Seek,SeekFrom};
+
+  #[cfg(feature="opensslpbkdf2")]
+  use storage::{Pbkdf2,StorageCypher};
+
+  #[cfg(feature="opensslpbkdf2")]
+  #[test]
+  fn test_pbkdf2 () {
+    let content = random_bytes(48);
+    let salt = Pbkdf2::gen_salt().unwrap();
+    let cw = Pbkdf2::new("apass".to_string(), 2000,salt.clone()).unwrap();
+    let rw = Pbkdf2::new("apass".to_string(), 2000,salt).unwrap();
+    assert!(cw.iter == rw.iter);
+    assert!(cw.keylength == rw.keylength);
+    assert!(cw.ivlength == rw.ivlength);
+    assert!(cw.salt == rw.salt);
+//    assert!(cw.cipher == rw.cipher);
+    assert!(cw.key == rw.key);
+
+    let ec = cw.encrypt(&content[..]).unwrap();
+    let dc = cw.decrypt(&ec[..]).unwrap();
+    assert!(dc == content, "{:?}\n{:?}\n{:?}",ec,dc, content);
+
+  }
 
   #[test]
   fn test_striple_enc_dec () {
@@ -929,24 +980,24 @@ pub mod test {
     let readstriple1  = read_striple::<_,NoKind,Striple<NoKind>,_,_>(&NoCypher, &mut buf, ref_builder_id_copy);
     debug!("{:?}", readstriple1);
     assert!(readstriple1.is_ok());
-    assert!(compare_striple(&readstriple1.unwrap().0,&striple1));
+    assert!(compare_striple(&readstriple1.unwrap().unwrap().0,&striple1));
     let readstriple2res = read_striple::<_,NoKind,Striple<NoKind>,_,_>(&NoCypher, &mut buf, ref_builder_id_copy);
     debug!("{:?}", readstriple2res);
     assert!(readstriple2res.is_ok());
-    let (readstriple2, readpkey) = readstriple2res.unwrap();
+    let (readstriple2, readpkey) = readstriple2res.unwrap().unwrap();
     assert!(compare_striple(&striple2,&readstriple2));
     assert!(readpkey.unwrap() == pkey);
     let readstriple3res = read_striple::<_,NoKind,Striple<NoKind>,_,_>(&NoCypher, &mut buf, ref_builder_id_copy);
     debug!("{:?}", readstriple3res);
     assert!(readstriple3res.is_ok());
-    let (readstriple3, readpkey) = readstriple3res.unwrap();
+    let (readstriple3, readpkey) = readstriple3res.unwrap().unwrap();
     assert!(compare_striple(&striple3,&readstriple3));
     assert!(readpkey.unwrap() == pkey);
     let readstriple4res = read_striple::<_,NoKind,Striple<NoKind>,_,_>(&NoCypher, &mut buf, ref_builder_id_copy);
     debug!("{:?}", readstriple4res);
     println!("{:?}", readstriple4res);
     assert!(readstriple4res.is_ok());
-    let (readstriple4, readpkey) = readstriple4res.unwrap();
+    let (readstriple4, readpkey) = readstriple4res.unwrap().unwrap();
     assert!(compare_striple(&striple4,&readstriple4));
     assert!(readpkey.unwrap() == pkey);
   }

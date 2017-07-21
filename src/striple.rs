@@ -1315,6 +1315,7 @@ pub enum ErrorKind {
   UnexpectedStriple,
   KindImplementationNotFound,
   MissingFile,
+  MissingIx,
   IOError,
   VarError,
   FromOption,
