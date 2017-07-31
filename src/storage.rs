@@ -480,7 +480,7 @@ pub fn write_striple
    S  : StripleIf,
    W  : Write,
     > (cypher : & SC, striple : &S, owned : Option<&[u8]>, fm : &FileMode,  dest : &mut W) -> Result<()> {
-      let (to_ser, ocont) = striple.striple_ser()?;
+      let (to_ser, ocont) = striple.striple_ser_with_def()?;
       let appendocont = match ocont {
         None => {
           try!(dest.write(&[STRIPLE_TAG_BYTE])); false

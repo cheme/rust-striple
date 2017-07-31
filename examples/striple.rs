@@ -409,7 +409,7 @@ fn run() {
    } else {
      // out on stdout as base64 : key then striple
      println!("{}", base64::encode_config(&owned_striple.1,BASE64CONF));
-     let mut sser = owned_striple.0.striple_ser().unwrap();
+     let mut sser = owned_striple.0.striple_ser_with_def().unwrap();
      match &sser.1 {
        &Some(ref bcon)=> {
          // TODO buff the out (just complete to be multiple of (see base64 padding)

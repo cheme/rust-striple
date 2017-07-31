@@ -20,6 +20,8 @@ use std::io::Cursor;
 use std::fs::File;
 use std::path::PathBuf;
 use std::fs::metadata;
+//use self::defaultStripleDefImpl::*;
+ 
 pub const NOKEY : &'static [u8] = &[];
 const ID_LENGTH : usize = 2;
 const KEY_LENGTH : usize = 2;
@@ -114,11 +116,29 @@ pub trait StripleIf : Debug {
   /// array of bcontread
   fn get_tosig<'a>(&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)>;
 
+  fn striple_ser_with_def<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)>;
   /// encode to bytes, but only striple content : Vec<u8> only include striple info.
   /// Might do others operation (like moving a file in a right container.
   /// If BCont is a Path, the path is written with a 2byte xtendsize before
   /// TODO ser with filename
-  fn striple_ser<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)>;
+  fn striple_ser<'a> (&'a self, Vec<u8>) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)>;
+
+  fn striple_def (&self) -> StripleDef {
+    StripleDef {
+        idsize : self.get_id().len(),
+        fromsize : self.get_from().len(),
+        sigsize : self.get_sig().len(),
+        aboutsize : if self.get_id() != self.get_about() {
+          self.get_about().len()
+        } else {
+          0
+        },
+        keysize : self.get_key().len(),
+        contentidssize : self.get_content_ids().iter().map(|i|i.len()).collect(),
+        contentsize : self.get_content().as_ref().map(|bcont|bcont.len()).unwrap_or(0),
+    }
+  }
+ 
 }
 
 /// Content wrapper over bytes with Read interface
@@ -408,7 +428,7 @@ pub struct Striple<T : StripleKind> {
 }
 
 #[derive(Debug,Clone)]
-pub struct StripleDef<T : StripleKind> {
+pub struct StripleDef {
   pub idsize : usize,
   pub fromsize : usize,
   pub sigsize : usize,
@@ -416,29 +436,6 @@ pub struct StripleDef<T : StripleKind> {
   pub keysize : usize,
   pub contentidssize : Vec<usize>,
   pub contentsize : usize,
-
-  pub phtype : PhantomData<T>,
-}
-pub trait StripleDefTrait {
-    fn getDef<T : StripleKind> (&self) -> StripleDef<T>;
-}
-pub mod defaultStripleDefImpl {
-  use super::*;
-
-  impl<S : StripleIf> StripleDefTrait for S {
-    fn getDef<T : StripleKind> (&self) -> StripleDef<T> {
-      StripleDef {
-        idsize : self.get_id().len(),
-        fromsize : self.get_from().len(),
-        sigsize : self.get_sig().len(),
-        aboutsize : self.get_about().len(),
-        keysize : self.get_key().len(),
-        contentidssize : self.get_content_ids().iter().map(|i|i.len()).collect(),
-        contentsize : self.get_content().as_ref().map(|bcont|bcont.len()).unwrap_or(0),
-        phtype : PhantomData,
-      }
-    }
-  }
 }
 
 
@@ -457,34 +454,43 @@ pub struct StripleRef<'a, T : StripleKind> {
   content : Option<BCont<'a>>,
 
   phtype : PhantomData<T>,
-} 
+}
+
+pub fn ser_stripledesc (d : &StripleDef, res : &mut Vec<u8>) -> Result<()> {
+
+  res.append(&mut xtendsize(d.idsize,ID_LENGTH));
+  res.append(&mut xtendsize(d.fromsize,ID_LENGTH));
+  res.append(&mut xtendsize(d.sigsize,SIG_LENGTH));
+
+  // never encode the same value for about and id (about len must be initiated to 0 in this case
+  assert!(d.idsize != d.aboutsize);
+  res.append(&mut xtendsize(d.aboutsize,ID_LENGTH));
+  res.append(&mut xtendsize(d.keysize,KEY_LENGTH));
+  res.append(&mut xtendsize(d.contentidssize.len(),CONTENTIDS_LENGTH));
+  for cid in d.contentidssize.iter() {
+    res.append(&mut xtendsize(*cid,ID_LENGTH));
+  };
+  res.append(&mut xtendsize(d.contentsize,CONTENT_LENGTH));
+  Ok(())
+}
 
 // identic code for stripleref and striple   
 macro_rules! ser_content(() => (
   #[inline]
   fn ser_tosig<'b> (&'b self, res : &mut Vec<u8>) -> Result<Option<&'b BCont<'b>>> {
-    let mut tmplen;
 
     // never encode the same value for about and id
     if self.id != self.about {
-      push_id(res, &self.about);
-    } else {
-      push_id(res, &[]);
+      res.append(&mut self.about.to_vec());
     }
-
-    tmplen = self.key.len();
-    res.append(&mut xtendsize(tmplen,KEY_LENGTH));
     res.append(&mut self.key.to_vec());
     
-    tmplen = self.contentids.len();
-    res.append(&mut xtendsize(tmplen,CONTENTIDS_LENGTH));
     for cid in self.contentids.iter(){
-      push_id(res, &cid)
+      res.append(&mut cid.to_vec());
     };
     let (con, ocon) = match self.content {
       Some(ref c) => {
-        let (ser, l) = c.copy_ser()?;
-        tmplen = l;
+        let (ser, _) = c.copy_ser()?;
         if ser {
           let b = c.get_byte()?;
           (Some(b),None)
@@ -493,11 +499,9 @@ macro_rules! ser_content(() => (
         }
       },
       None => {
-        tmplen = 0;
         (None,None)
       },
     };
-    res.append(&mut xtendsize(tmplen,CONTENT_LENGTH));
     con.map(|c|res.append(&mut c.to_vec()));
     Ok(ocon)
   }
@@ -606,16 +610,19 @@ impl<T : StripleKind> StripleIf for Striple<T> {
   }
  
 
-  fn striple_ser<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
+  fn striple_ser_with_def<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
     let mut res = Vec::new();
-    let tmplen;
     push_id(&mut res, <T as StripleKind>::get_algo_key());
     push_id(&mut res, &self.contentenc);
-    push_id(&mut res, &self.id);
-    push_id(&mut res, &self.from);
+    ser_stripledesc(&self.striple_def(), &mut res)?;
+    let r = self.striple_ser(res)?;
 
-    tmplen = self.sig.len();
-    res.append(&mut xtendsize(tmplen,SIG_LENGTH));
+    Ok(r)
+  }
+
+  fn striple_ser<'a> (&'a self, mut res : Vec<u8>) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
+    res.append(&mut self.id.to_vec());
+    res.append(&mut self.from.to_vec());
     res.append(&mut self.sig.to_vec());
 
     let ocon = self.ser_tosig(&mut res)?;
@@ -678,28 +685,27 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
   fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>> {
     T::D::derive_id(sig)
   }
- 
- 
 
-
-
-  fn striple_ser<'b> (&'b self) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
+  fn striple_ser_with_def<'b> (&'b self) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
     let mut res = Vec::new();
-    let tmplen;
     push_id(&mut res, <T as StripleKind>::get_algo_key());
-    push_id(&mut res, self.contentenc);
-    push_id(&mut res, self.id);
-    push_id(&mut res, self.from);
+    push_id(&mut res, &self.contentenc);
+    ser_stripledesc(&self.striple_def(), &mut res)?;
+    let r = self.striple_ser(res)?;
 
-    tmplen = self.sig.len();
-    res.append(&mut xtendsize(tmplen,SIG_LENGTH));
+    Ok(r)
+  }
+
+  fn striple_ser<'b> (&'b self, mut res : Vec<u8>) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
+    res.append(&mut self.id.to_vec());
+    res.append(&mut self.from.to_vec());
     res.append(&mut self.sig.to_vec());
 
     let ocon = self.ser_tosig(&mut res)?;
 
     Ok((res,ocon))
   }
-
+ 
   #[inline]
   fn get_key(&self) -> &[u8]{self.key}
   #[inline]
@@ -955,9 +961,14 @@ impl<T : AsStripleIf + Debug> StripleIf for T {
     self.as_striple_if().get_tosig()
   }
   #[inline]
-  fn striple_ser<'b> (&'b self) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
-    self.as_striple_if().striple_ser()
+  fn striple_ser_with_def<'b> (&'b self) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
+    self.as_striple_if().striple_ser_with_def()
   }
+  #[inline]
+  fn striple_ser<'b> (&'b self, res : Vec<u8>) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
+    self.as_striple_if().striple_ser(res)
+  }
+
 
 }
 
@@ -1022,7 +1033,7 @@ impl<'a, T : StripleKind> AsStriple<'a, T> for Striple<T> {
 /// the byte form of an striple
 impl<T : StripleKind> Serialize for Striple<T> {
   fn serialize<S:Serializer>(&self, s: S) -> StdResult<S::Ok, S::Error> {
-    let (mut v, ocon) = match self.striple_ser() {
+    let (mut v, ocon) = match self.striple_ser_with_def() {
       Ok(a) => a,
       Err(_) => 
             panic!("cannot der striple"), // TODO see next panic
@@ -1639,19 +1650,19 @@ pub mod test {
     ori_2.sig = ori_1.from.clone();
     let ori_ref_1 = ori_1.as_striple();
     // No file
-    let (encori_1, oc) = ori_1.striple_ser().unwrap();
+    let (encori_1, oc) = ori_1.striple_ser_with_def().unwrap();
     assert!(oc.is_none());
     debug!("Encoded : \n{:?}",encori_1);
     let typednone : Option<&Striple<TestKind1>> = Some(&ori_2);
     let dec1 : Striple<TestKind1> = striple_dser(&encori_1, None, typednone,ref_builder_id_copy).unwrap();
     assert_eq!(compare_striple(&ori_1,&dec1), true);
-    let (encori_ref_1,oc2) = ori_ref_1.striple_ser().unwrap();
+    let (encori_ref_1,oc2) = ori_ref_1.striple_ser_with_def().unwrap();
     assert!(oc2.is_none());
     assert_eq!(encori_1,encori_ref_1);
     let redec1 : Striple<TestKind1> = striple_copy_dser(&encori_1, None, typednone,copy_builder_id).unwrap();
     assert_eq!(compare_striple(&ori_1,&redec1), true);
     let redec1bis : StripleRef<TestKind1> = striple_dser(&encori_1, None, typednone,ref_builder_id).unwrap();
-    let (encori_ref_1_bis,oc3) = redec1bis.striple_ser().unwrap();
+    let (encori_ref_1_bis,oc3) = redec1bis.striple_ser_with_def().unwrap();
     assert!(oc3.is_none());
     assert_eq!(encori_1,encori_ref_1_bis);
   }
