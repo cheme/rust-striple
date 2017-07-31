@@ -340,9 +340,11 @@ fn run() {
    let content = if args.flag_contentfile {
      // TODO add option to get BCont file instead of load
      if args.flag_relative || args.flag_absolute {
-       let fileexists = fs::metadata(&args.arg_contentfile).map(|f|f.is_file()).unwrap_or(false);
+       let metas = fs::metadata(&args.arg_contentfile);
+       let fileexists = metas.as_ref().map(|f|f.is_file()).unwrap_or(false);
+       let fsize = metas.map(|m|m.len() as usize);
        if fileexists {
-         Some(BCont::LocalPath(path::PathBuf::from(&args.arg_contentfile)))
+         Some(BCont::LocalPath(path::PathBuf::from(&args.arg_contentfile),fsize.unwrap_or(0)))
        } else {
          panic!("Invalid content file for striple creation")
        }

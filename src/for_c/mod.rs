@@ -162,7 +162,7 @@ pub unsafe extern "C" fn get_content(st : striple_ptr) -> striple_bcont {
         ispath : false,
       }
     },
-    &BCont::LocalPath(ref path) => {
+    &BCont::LocalPath(ref path, _) => {
       let b = path.to_str().unwrap().as_bytes();
       let bb = Box::new(b);
       striple_bcont {

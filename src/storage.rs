@@ -493,7 +493,7 @@ pub fn write_striple
             &BCont::NotOwnedBytes(ref b) => {
               try!(writebcontheader(&b[..], fm, dest))
             },
-            &BCont::LocalPath(ref p) => {
+            &BCont::LocalPath(ref p,_) => {
               try!(writelocalpathheader(p, fm, dest))
             },
  
@@ -582,8 +582,9 @@ pub fn read_striple
         let msg = format!("Missing underlying file for a striple entry : {:?}",&path);
         return Err(StripleError(msg, StripleErrorKind::MissingFile, None))
       };
+      let s = meta.len() as usize;
       
-      Some(BCont::LocalPath(path))
+      Some(BCont::LocalPath(path,s))
     },
  
     _ => return Err(StripleError("Unknown striple tag".to_string(), StripleErrorKind::KindImplementationNotFound, None)),

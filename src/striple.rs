@@ -126,7 +126,7 @@ pub trait StripleIf : Debug {
 pub enum BCont<'a> {
   OwnedBytes(Vec<u8>),
   NotOwnedBytes(&'a[u8]),
-  LocalPath(PathBuf),
+  LocalPath(PathBuf,usize),
 }
 /*  ttimpl<'a> convert::AsRef<[u8]> for BCont<'a> {
   fn(&Self) -> &[u8] {
@@ -157,7 +157,7 @@ impl<'a> BCont<'a> {
     match self {
       &BCont::OwnedBytes(ref b) => Ok(BContRead::Bytes(Cursor::new(&b[..]))),
       &BCont::NotOwnedBytes(ref b) => Ok(BContRead::Bytes(Cursor::new(b))),
-      &BCont::LocalPath(ref p) => from_error(File::open(p).map(|f|BContRead::LocalPath(f))),
+      &BCont::LocalPath(ref p,_) => from_error(File::open(p).map(|f|BContRead::LocalPath(f))),
     }
   }
   /// check if for serialization (and also checking) we copy the content through `get_bytes` copy or include bcont
@@ -167,7 +167,7 @@ impl<'a> BCont<'a> {
     match self {
       &BCont::OwnedBytes(ref b) => Ok((b.len() < CONTENT_LENGTH_COPYTRESHOLD, b.len())),
       &BCont::NotOwnedBytes(ref b) => Ok((b.len() < CONTENT_LENGTH_COPYTRESHOLD, b.len())),
-      &BCont::LocalPath(ref p) => {
+      &BCont::LocalPath(ref p,_) => {
         let s = metadata(p)?.len() as usize;
         Ok((false, s))
       },
@@ -181,7 +181,7 @@ impl<'a> BCont<'a> {
     match self {
       &BCont::OwnedBytes(ref b) => Ok(b.clone()),
       &BCont::NotOwnedBytes(ref b) => Ok(b.to_vec()),
-      &BCont::LocalPath(_) => {
+      &BCont::LocalPath(_,_) => {
         let mut bcr = try!(self.get_readable());
         let mut r = Vec::new();
         try!(bcr.trait_read().read_to_end(&mut r));
@@ -193,14 +193,21 @@ impl<'a> BCont<'a> {
     match self {
       &BCont::NotOwnedBytes(ref b) => BCont::OwnedBytes(b.to_vec()),
       &BCont::OwnedBytes(ref b) => BCont::OwnedBytes(b.clone()),
-      &BCont::LocalPath(ref p) => BCont::LocalPath(p.clone()),
+      &BCont::LocalPath(ref p,s) => BCont::LocalPath(p.clone(),s),
     }
   }
   fn to_ref<'b>(&'b self) -> BCont<'b> {
     match self {
       &BCont::NotOwnedBytes(ref b) => BCont::NotOwnedBytes(b),
       &BCont::OwnedBytes(ref b) => BCont::NotOwnedBytes(&b[..]),
-      &BCont::LocalPath(ref p) => BCont::LocalPath(p.clone()),
+      &BCont::LocalPath(ref p,s) => BCont::LocalPath(p.clone(),s),
+    }
+  }
+  fn len(&self) -> usize {
+    match self {
+      &BCont::NotOwnedBytes(ref b) => b.len(),
+      &BCont::OwnedBytes(ref b) => b.len(),
+      &BCont::LocalPath(ref p,s) => s,
     }
   }
 }
@@ -399,6 +406,42 @@ pub struct Striple<T : StripleKind> {
 
   phtype : PhantomData<T>,
 }
+
+#[derive(Debug,Clone)]
+pub struct StripleDef<T : StripleKind> {
+  pub idsize : usize,
+  pub fromsize : usize,
+  pub sigsize : usize,
+  pub aboutsize : usize,
+  pub keysize : usize,
+  pub contentidssize : Vec<usize>,
+  pub contentsize : usize,
+
+  pub phtype : PhantomData<T>,
+}
+pub trait StripleDefTrait {
+    fn getDef<T : StripleKind> (&self) -> StripleDef<T>;
+}
+pub mod defaultStripleDefImpl {
+  use super::*;
+
+  impl<S : StripleIf> StripleDefTrait for S {
+    fn getDef<T : StripleKind> (&self) -> StripleDef<T> {
+      StripleDef {
+        idsize : self.get_id().len(),
+        fromsize : self.get_from().len(),
+        sigsize : self.get_sig().len(),
+        aboutsize : self.get_about().len(),
+        keysize : self.get_key().len(),
+        contentidssize : self.get_content_ids().iter().map(|i|i.len()).collect(),
+        contentsize : self.get_content().as_ref().map(|bcont|bcont.len()).unwrap_or(0),
+        phtype : PhantomData,
+      }
+    }
+  }
+}
+
+
 
 /// Striple struct object to use striple functionality from other existing struct by using
 /// reference only. For field definition please refer to `Striple`
@@ -1555,7 +1598,7 @@ pub mod test {
 //    let common_id = random_bytes(40);
     let common_id_2 = random_bytes(20);
     let longcontent = random_bytes(600);
-    let path = { 
+    let (path,size) = { 
       //let tmpdir = env::temp_dir();
       let tmpdir = PathBuf::new(); // TODO tmpdir when relative path ok??
       let mytmpdirpath = tmpdir.join("./test_rust_striple_sample");
@@ -1564,7 +1607,9 @@ pub mod test {
       debug!("Creating tmp file : {:?}",fpath);
       let mut f = File::create(&fpath).unwrap();
       f.write_all(&longcontent[..]).unwrap();
-      fpath
+      let s = f.metadata().unwrap().len() as usize;
+      assert!(s == longcontent.len());
+      (fpath,s)
     };
     Striple {
         contentenc : vec!(),
@@ -1574,7 +1619,7 @@ pub mod test {
         about : vec!(),
         key : vec!(0),
         contentids : vec!(),
-        content : Some(BCont::LocalPath(path)),
+        content : Some(BCont::LocalPath(path,size)),
 
         phtype : PhantomData,
 
