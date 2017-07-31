@@ -463,7 +463,7 @@ pub fn ser_stripledesc (d : &StripleDef, res : &mut Vec<u8>) -> Result<()> {
   res.append(&mut xtendsize(d.sigsize,SIG_LENGTH));
 
   // never encode the same value for about and id (about len must be initiated to 0 in this case
-  assert!(d.idsize != d.aboutsize);
+//  assert!(d.idsize != d.aboutsize || );
   res.append(&mut xtendsize(d.aboutsize,ID_LENGTH));
   res.append(&mut xtendsize(d.keysize,KEY_LENGTH));
   res.append(&mut xtendsize(d.contentidssize.len(),CONTENTIDS_LENGTH));
