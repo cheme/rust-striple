@@ -14,7 +14,7 @@
 //! TODO return error : cf all unwrap_or(false)
 
 
-use striple::{StripleIf,OwnedStripleIf,BCont,striple_dser,NoKind,StripleRef,Error};
+use striple::{StripleIf,OwnedStripleIf,BCont,striple_dser_with_def,NoKind,StripleRef,Error};
 use anystriple::{AnyStriple,copy_builder_any};
 use std::mem::transmute;
 use storage::{FileStripleIterator,init_any_cipher_stdin,AnyCyphers};
@@ -207,7 +207,7 @@ pub unsafe extern "C" fn any_parse_striple(input : *mut u8, input_length : size_
   let len = input_length as usize;
   let invec = Vec::from_raw_parts(input, len, len);
   let typednone : Option<&AnyStriple> = None; 
-  match striple_dser(&invec[..], None, typednone, copy_builder_any) {
+  match striple_dser_with_def(&invec[..], None, typednone, copy_builder_any) {
     Ok(st) => {
       // not need heap allocate, maybe with a anystriple version ref ???
       let h = Box::new(st);

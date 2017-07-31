@@ -23,7 +23,7 @@ use std::marker::PhantomData;
 use striple::Error as StripleError;
 use striple::ErrorKind as StripleErrorKind;
 //use striple::striple_copy_dser;
-use striple::striple_dser;
+use striple::striple_dser_with_def;
 use striple::BCont;
 use std::path::PathBuf;
 use striple::{
@@ -605,7 +605,7 @@ pub fn read_striple
   debug!("in st : {:?}", st);
   let typednone : Option<&T> = None;
 
-  striple_dser(&st[..], bcon, typednone, copy_builder).map(|s|Some((s,mpkey)))
+  striple_dser_with_def(&st[..], bcon, typednone, copy_builder).map(|s|Some((s,mpkey)))
 }
 
 /*

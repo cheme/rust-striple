@@ -761,18 +761,62 @@ pub fn copy_builder_id<'a,K : StripleKind>(algoid :&[u8], sr : Striple<K>) -> Re
 }
 
 #[inline]
-/// dser without lifetime TODO redesign to interface on same as striple_dser : here useless as
+/// dser without lifetime TODO redesign to interface on same as striple_dser_with_def : here useless as
 /// cannot cast in any triple without a copy
 pub fn striple_copy_dser<T : StripleIf, K : StripleKind, FS : StripleIf, B> (bytes : &[u8], obc : Option<BCont>, docheck : Option<&FS>, builder : B) -> Result<T>
   where B : Fn(&[u8], Striple<K>) -> Result<T>
 {
-  striple_dser(bytes, obc, docheck,
+  striple_dser_with_def(bytes, obc, docheck,
    |algoid, sref| {
     builder(algoid, sref.as_striple())
   }
   )
 }
 
+pub fn striple_read_def(bytes : &[u8], ix : &mut usize) -> StripleDef
+{
+  let idsize = xtendsizedec(bytes, ix, ID_LENGTH);
+  let fromsize = xtendsizedec(bytes, ix, ID_LENGTH);
+
+  let sigsize = xtendsizedec(bytes, ix, SIG_LENGTH);
+  
+  let aboutsize = xtendsizedec(bytes, ix, ID_LENGTH);
+
+  let keysize = xtendsizedec(bytes, ix, KEY_LENGTH);
+
+  let nbcids = xtendsizedec(bytes, ix, CONTENTIDS_LENGTH);
+  let mut contentidssize = Vec::new();
+  for _ in 0 .. nbcids {
+    let is = xtendsizedec(bytes, ix, ID_LENGTH);
+    contentidssize.push(is);
+  };
+
+  let contentsize = xtendsizedec(bytes, ix, CONTENT_LENGTH);
+
+  StripleDef {
+    idsize : idsize,
+    fromsize : fromsize,
+    sigsize : sigsize,
+    aboutsize : aboutsize,
+    keysize : keysize,
+    contentidssize : contentidssize,
+    contentsize : contentsize,
+  }
+
+}
+ 
+pub fn striple_dser_with_def<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (bytes : &'a[u8], obc : Option<BCont<'a>>, docheck : Option<&FS>, ref_builder : B) -> Result<T>
+  where B : Fn(&[u8], StripleRef<'a,K>) -> Result<T>
+{
+  let mut ix = 0;
+  let algoenc = read_id (bytes, &mut ix);
+
+  let contentenc = read_id (bytes, &mut ix); 
+
+  let sdef = striple_read_def(bytes, &mut ix);
+  striple_dser(bytes,obc,docheck,ref_builder,&sdef, algoenc, contentenc, &mut ix)
+}
+ 
 /// decode from bytes, with possible signing validation
 /// Deserialize does not result in StripleIf, because StripleIf is use to allow reference to
 /// existing structure and adding content to a structure and still being an StripleIf, yet
@@ -783,49 +827,33 @@ pub fn striple_copy_dser<T : StripleIf, K : StripleKind, FS : StripleIf, B> (byt
 ///
 /// If optional BCont is used, we assume it is valid, a size check is done as it is not to costy.
 /// TODO optional BCon as param for deser + file size check??? !!!
-pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (bytes : &'a[u8], obc : Option<BCont<'a>>, docheck : Option<&FS>, ref_builder : B) -> Result<T>
+pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (bytes : &'a[u8], obc : Option<BCont<'a>>, docheck : Option<&FS>, ref_builder : B, sdef : &StripleDef, algoenc : &'a[u8], contentenc : &'a[u8], ix : &mut usize) -> Result<T>
   where B : Fn(&[u8], StripleRef<'a,K>) -> Result<T>
 {
-  let mut ix = 0;
-  let algoenc = read_id (bytes, &mut ix);
-  let contentenc = read_id (bytes, &mut ix); 
-  let id = read_id (bytes, &mut ix);
-  let from = read_id (bytes, &mut ix);
+  
+  let id = read_len(bytes,ix,sdef.idsize);
+  
+  let from = read_len(bytes,ix,sdef.fromsize);
 
-  let s = xtendsizedec(bytes, &mut ix, SIG_LENGTH);
-  let mut sig = if ix + s <= bytes.len() {
-    &bytes[ix .. ix + s]
-  } else {
-    &bytes[0 .. 0]
-  };
-  ix = ix + s;
+  let mut sig = read_len(bytes,ix,sdef.sigsize);
 
   if sig.len() == 0 {
     sig = id;
   }
   
-  let startcontent = ix;
+  let startcontent = *ix;
 
-  let mut about = read_id (bytes, &mut ix);
-  if about.len() == 0 {
-    about = id;
-  };
-
-  let s = xtendsizedec(bytes, &mut ix, KEY_LENGTH);
-  let key = if ix + s <= bytes.len() {
-    &bytes[ix .. ix + s]
+  let about = if sdef.aboutsize == 0 {
+    id
   } else {
-    &bytes[0 .. 0]
-  };
-  ix = ix + s;
-
-  let nbcids = xtendsizedec(bytes, &mut ix, CONTENTIDS_LENGTH);
-  let mut contentids = Vec::new();
-  for _ in 0 .. nbcids {
-    contentids.push(read_id (bytes, &mut ix));
+    read_len(bytes,ix,sdef.aboutsize)
   };
 
-  let s = xtendsizedec(bytes, &mut ix, CONTENT_LENGTH);
+  let key = read_len(bytes,ix,sdef.keysize);
+
+  let contentids = sdef.contentidssize.iter().map(|s|read_len(bytes,ix,*s)).collect();
+
+  let s = sdef.contentsize;
   if let Some(fromst) = docheck {
     if fromst.get_id() != &from[..] {
       return Err(Error("Unexpected from id".to_string(), ErrorKind::UnexpectedStriple, None))
@@ -858,25 +886,22 @@ pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (byte
     if s == 0 {
       None
     } else {
-      ix = ix + s;
-      if ix <= bytes.len() {
-        Some(BCont::NotOwnedBytes(&bytes[ix - s .. ix]))
+      *ix = *ix + s;
+      if *ix <= bytes.len() {
+        Some(BCont::NotOwnedBytes(&bytes[*ix - s .. *ix]))
       } else {
         return Err(Error("Mismatch size of content".to_string(), ErrorKind::DecodingError, None))
       }
     }
   },};
-  if ix != bytes.len() {
+  if *ix != bytes.len() {
     debug!("strip or {:?} - {:?}", ix, bytes.len());
     return Err(Error("Mismatch size of striple".to_string(), ErrorKind::DecodingError, None))
   }
 
-
-
-
   if id.len() == 0 
   || from.len() == 0 
-  || (contentids.len() == 0 && content.is_none())
+  || (sdef.contentidssize.len() == 0 && content.is_none())
   {
     Err(Error("Invalid striple decoding".to_string(), ErrorKind::DecodingError, None))
   } else {
@@ -1066,7 +1091,7 @@ impl<'de,T : StripleKind> Deserialize<'de> for Striple<T> {
     // Dummy type
     let typednone : Option<&Striple<T>> = None;
     tmpres.and_then(|vec| 
-      striple_dser(&vec, None, typednone, ref_builder_id_copy).map_err(|err|
+      striple_dser_with_def(&vec, None, typednone, ref_builder_id_copy).map_err(|err|
         <D::Error as SerdeError>::custom(&format!("{:?}",err))
       )
     )
@@ -1352,6 +1377,11 @@ pub fn push_id(res : &mut Vec<u8>, content : &[u8]) {
 /// The function update index value
 pub fn read_id<'a> (bytes : &'a[u8], ix : &mut usize) -> &'a[u8] {
   let s = xtendsizedec(bytes, ix, ID_LENGTH);
+  read_len(bytes,ix,s)
+}
+#[inline]
+/// The function update index value
+pub fn read_len<'a> (bytes : &'a[u8], ix : &mut usize, s : usize) -> &'a[u8] {
   let res = if *ix + s <= bytes.len() {
     &bytes[*ix .. *ix + s]
   } else {
@@ -1360,6 +1390,7 @@ pub fn read_id<'a> (bytes : &'a[u8], ix : &mut usize) -> &'a[u8] {
   *ix = *ix + s;
   res
 }
+
 
 
 #[derive(Debug)]
@@ -1486,7 +1517,7 @@ pub mod test {
   use std::marker::PhantomData;
   use striple::Striple;
   use striple::Result;
-  use striple::striple_dser;
+  use striple::striple_dser_with_def;
   use striple::striple_copy_dser;
   use striple::StripleRef;
   use striple::StripleIf;
@@ -1654,14 +1685,14 @@ pub mod test {
     assert!(oc.is_none());
     debug!("Encoded : \n{:?}",encori_1);
     let typednone : Option<&Striple<TestKind1>> = Some(&ori_2);
-    let dec1 : Striple<TestKind1> = striple_dser(&encori_1, None, typednone,ref_builder_id_copy).unwrap();
+    let dec1 : Striple<TestKind1> = striple_dser_with_def(&encori_1, None, typednone,ref_builder_id_copy).unwrap();
     assert_eq!(compare_striple(&ori_1,&dec1), true);
     let (encori_ref_1,oc2) = ori_ref_1.striple_ser_with_def().unwrap();
     assert!(oc2.is_none());
     assert_eq!(encori_1,encori_ref_1);
     let redec1 : Striple<TestKind1> = striple_copy_dser(&encori_1, None, typednone,copy_builder_id).unwrap();
     assert_eq!(compare_striple(&ori_1,&redec1), true);
-    let redec1bis : StripleRef<TestKind1> = striple_dser(&encori_1, None, typednone,ref_builder_id).unwrap();
+    let redec1bis : StripleRef<TestKind1> = striple_dser_with_def(&encori_1, None, typednone,ref_builder_id).unwrap();
     let (encori_ref_1_bis,oc3) = redec1bis.striple_ser_with_def().unwrap();
     assert!(oc3.is_none());
     assert_eq!(encori_1,encori_ref_1_bis);
