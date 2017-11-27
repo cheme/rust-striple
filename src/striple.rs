@@ -104,19 +104,19 @@ pub type Result<R> = StdResult<R,Error>;
 /// TODO word on enum to serialize and manage parametric types
 pub trait StripleIf : StripleFieldsIf {
 
-  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool>;
-  fn sign_content(&self, _ : &[u8], _ : &mut Read) -> Result<Vec<u8>>;
+  fn check_content<R : Read>(&self, cont : &mut R, sig : &[u8]) -> Result<bool>;
+  fn sign_content<R : Read>(&self, _ : &[u8], _ : &mut R) -> Result<Vec<u8>>;
   fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>>;
   fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> Result<bool>;
   /// check striple integrity (signature and key)
-  fn check (&self, from : &StripleIf) -> Result<bool> {
+  fn check<S : StripleIf> (&self, from : &S) -> Result<bool> {
     //self.check_id(from).and_then(|a|self.check_sig(from).map(|b|a && b))
     Ok(self.check_id(from)? && self.check_sig(from)?)
   }
 
 
   /// check signature of striple
-  fn check_sig(&self, from : &StripleIf) -> Result<bool> {
+  fn check_sig<S : StripleIf>(&self, from : &S) -> Result<bool> {
     Ok(match self.get_tosig() {
       Ok((v, oc)) => {
         let mut cv = Cursor::new(v);
@@ -135,12 +135,74 @@ pub trait StripleIf : StripleFieldsIf {
   }
 
   /// check key of striple
-  fn check_id(&self, from : &StripleIf) -> Result<bool> {
+  fn check_id<S : StripleIf>(&self, from : &S) -> Result<bool> {
     from.check_id_derivation(self.get_sig(), self.get_id())
   }
 
 }
 
+/// trait to use striple as fat pointer
+pub trait GenStripleIf : StripleFieldsIf {
+  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool>;
+  fn sign_content(&self, _ : &[u8], _ : &mut Read) -> Result<Vec<u8>>;
+  fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>>;
+  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> Result<bool>;
+  fn check(&self, from : &GenStripleIf) -> Result<bool> {
+    Ok(self.check_id(from)? && self.check_sig(from)?)
+  }
+  fn check_sig(&self, from : &GenStripleIf) -> Result<bool> {
+    Ok(match self.get_tosig() {
+      Ok((v, oc)) => {
+        let mut cv = Cursor::new(v);
+        from.get_id() == self.get_from() && match oc {
+          Some (bc) => {
+            match bc.get_readable() {
+              Ok(mut r) => from.check_content(&mut cv.chain(r.trait_read()), self.get_sig())?,
+              Err(_) => false,
+            }
+          },
+          None => from.check_content(&mut cv, self.get_sig())?,
+        }
+      },
+      Err(_) => false,
+    })
+  }
+
+  fn check_id(&self, from : &GenStripleIf) -> Result<bool> {
+    from.check_id_derivation(self.get_sig(), self.get_id())
+  }
+}
+/*
+impl<S : StripleIf> GenStripleIf for S {
+  #[inline]
+  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool> {
+    <Self as StripleIf>::check_content(self,cont,sig)
+  }
+  #[inline]
+  fn sign_content(&self, a : &[u8], b : &mut Read) -> Result<Vec<u8>> {
+    <Self as StripleIf>::sign_content(self,a,b)
+  }
+  #[inline]
+  fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>> {
+    <Self as StripleIf>::derive_id(self,sig)
+  }
+  #[inline]
+  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> Result<bool> {
+    <Self as StripleIf>::check_id_derivation(self,sig,id)
+  }
+  #[inline]
+  fn check(&self, from : &GenStripleIf) -> Result<bool> {
+    <Self as StripleIf>::check(self,from)
+  }
+  #[inline]
+  fn check_sig(&self, from : &GenStripleIf) -> Result<bool> {
+    <Self as StripleIf>::check_sig(self,from)
+  }
+  #[inline]
+  fn check_id(&self, from : &GenStripleIf) -> Result<bool> {
+    <Self as StripleIf>::check_id(self,from)
+  }
+}*/
 pub trait StripleFieldsIf : Debug {
 
   /// get key of striple defining algo scheme
@@ -166,7 +228,6 @@ pub trait StripleFieldsIf : Debug {
 
   /// get striple key value
   fn get_key(&self) -> &[u8];
-
 
   /// get striple signature value
   fn get_sig(&self) -> &[u8];
@@ -203,10 +264,16 @@ pub trait StripleFieldsIf : Debug {
  
 }
 
-
-pub trait StripleImpl : StripleFieldsIf { 
+/// Use of striple kind for default implementation (StripleIf is implemented for StripleImpl
+/// trait). In most cases to make an struct a striple, this is the best approach.
+pub trait StripleImpl : StripleFieldsIf {
   type Kind : StripleKind;
 }
+pub trait GenStripleImpl : StripleFieldsIf {
+  type Kind : StripleKind;
+}
+
+
 pub trait InstantiableSelfStripleImpl : OwnedStripleFieldsIf + InstantiableStripleImpl {
   fn self_init(&mut self) -> Result<()> {
 /*  fn private_key_clone(&self) -> Vec<u8> {
@@ -236,6 +303,7 @@ pub trait InstantiableSelfStripleImpl : OwnedStripleFieldsIf + InstantiableStrip
       Ok(())
   }
 }
+
 pub trait InstantiableStripleImpl : StripleImpl + Sized {
   /// init signing (should not be call directly, is called by default calc_init implementation)
   fn init(&mut self,
@@ -263,14 +331,32 @@ pub trait InstantiableStripleImpl : StripleImpl + Sized {
 
 }
 
-impl<SI : StripleImpl> StripleIf for SI {
-
+impl<SI : GenStripleImpl> GenStripleIf for SI {
   #[inline]
   fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool> {
     <SI::Kind as StripleKind>::S::check_content(&self.get_key(), cont, sig)
   }
   #[inline]
   fn sign_content(&self, pri : &[u8], con : &mut Read) -> Result<Vec<u8>> {
+    <SI::Kind as StripleKind>::S::sign_content(pri, con)
+  }
+  #[inline]
+  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> Result<bool> {
+    <SI::Kind as StripleKind>::D::check_id_derivation(sig,id)
+  }
+  #[inline]
+  fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>> {
+    <SI::Kind as StripleKind>::D::derive_id(sig)
+  }
+}
+impl<SI : StripleImpl> StripleIf for SI {
+
+  #[inline]
+  fn check_content<R : Read>(&self, cont : &mut R, sig : &[u8]) -> Result<bool> {
+    <SI::Kind as StripleKind>::S::check_content(&self.get_key(), cont, sig)
+  }
+  #[inline]
+  fn sign_content<R : Read>(&self, pri : &[u8], con : &mut R) -> Result<Vec<u8>> {
     <SI::Kind as StripleKind>::S::sign_content(pri, con)
   }
   #[inline]
@@ -477,16 +563,16 @@ pub trait OwnedStripleIf : StripleIf + OwnedStripleFieldsIf {
 
 // TODO owned pair of striple
 
-impl<'a, ST : StripleIf> AsStripleIf for (&'a ST, &'a [u8]) {
+impl<'a, ST : GenStripleIf> AsStripleIf for (&'a ST, &'a [u8]) {
   #[inline]
-  fn as_striple_if(&self) -> &StripleIf {
+  fn as_striple_if(&self) -> &GenStripleIf {
     self.0
   }
 }
 
-impl<'a, ST : StripleIf> AsStripleIf for (ST, Vec<u8>) {
+impl<'a, ST : GenStripleIf> AsStripleIf for (ST, Vec<u8>) {
   #[inline]
-  fn as_striple_if(&self) -> &StripleIf {
+  fn as_striple_if(&self) -> &GenStripleIf {
     &self.0
   }
 }
@@ -539,11 +625,11 @@ impl<ST : InstantiableStripleImpl> OwnedStripleFieldsIf for SelfOwned<ST> {
 
 macro_rules! if_0{() => (
   #[inline]
-  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool> {
+  fn check_content<R : Read>(&self, cont : &mut R, sig : &[u8]) -> Result<bool> {
     self.0.check_content(cont,sig)
   }
   #[inline]
-  fn sign_content(&self, a : &[u8], b : &mut Read) -> Result<Vec<u8>> {
+  fn sign_content<R : Read>(&self, a : &[u8], b : &mut R) -> Result<Vec<u8>> {
     self.0.sign_content(a,b)
   }
   #[inline]
@@ -555,15 +641,15 @@ macro_rules! if_0{() => (
     self.0.check_id_derivation(sig,id)
   }
   #[inline]
-  fn check (&self, from : &StripleIf) -> Result<bool> {
+  fn check<S : StripleIf> (&self, from : &S) -> Result<bool> {
     self.0.check(from)
   }
   #[inline]
-  fn check_sig(&self, from : &StripleIf) -> Result<bool> {
+  fn check_sig<S : StripleIf>(&self, from : &S) -> Result<bool> {
     self.0.check_sig(from)
   }
   #[inline]
-  fn check_id(&self, from : &StripleIf) -> Result<bool> {
+  fn check_id<S : StripleIf>(&self, from : &S) -> Result<bool> {
     self.0.check_id(from)
   }
 
@@ -1173,7 +1259,7 @@ pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (byte
 /// It is an adapter for cleaner polymorphism
 /// (see AnyStriple impl).
 pub trait AsStripleIf {
-  fn as_striple_if(&self) -> &StripleIf;
+  fn as_striple_if(&self) -> &GenStripleIf;
 }
 /*
 #[derive(Debug)]

@@ -15,6 +15,7 @@ use striple::{
   AsStripleIf,
   Striple,
   StripleRef,
+  GenStripleIf,
   Error,
   ref_as_kind,
   StripleKind,
@@ -148,15 +149,16 @@ macro_rules! derive_any_striple(($en:ident{ $($st:ident($ty:ty),)* }) => (
 pub enum $en {
   $( $st($ty), )*
 }
+/*
 impl AsStripleIf for $en {
 
   #[inline]
-  fn as_striple_if(&self) -> &StripleIf {
+  fn as_striple_if(&self) -> &GenStripleIf {
     match self {
       $( & $en::$st(ref i) => i, )*
     }
   }
-}
+}*/
 
 impl StripleFieldsIf for $en {
   #[inline]
@@ -240,13 +242,13 @@ impl StripleFieldsIf for $en {
 }
 impl StripleIf for $en {
   #[inline]
-  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool> {
+  fn check_content<R : Read>(&self, cont : &mut R, sig : &[u8]) -> Result<bool> {
     match self {
       $( & $en::$st(ref i) => i.check_content(cont,sig), )*
     }
   }
   #[inline]
-  fn sign_content(&self, a : &[u8], b : &mut Read) -> Result<Vec<u8>> {
+  fn sign_content<R : Read>(&self, a : &[u8], b : &mut R) -> Result<Vec<u8>> {
     match self {
       $( & $en::$st(ref i) => i.sign_content(a,b), )*
     }
@@ -264,19 +266,19 @@ impl StripleIf for $en {
     }
   }
   #[inline]
-  fn check (&self, from : &StripleIf) -> Result<bool> {
+  fn check<S : StripleIf>(&self, from : &S) -> Result<bool> {
     match self {
       $( & $en::$st(ref i) => i.check(from), )*
     }
   }
   #[inline]
-  fn check_sig(&self, from : &StripleIf) -> Result<bool> {
+  fn check_sig<S : StripleIf>(&self, from : &S) -> Result<bool> {
     match self {
       $( & $en::$st(ref i) => i.check_sig(from), )*
     }
   }
   #[inline]
-  fn check_id(&self, from : &StripleIf) -> Result<bool> {
+  fn check_id<S : StripleIf>(&self, from : &S) -> Result<bool> {
     match self {
       $( & $en::$st(ref i) => i.check_id(from), )*
     }
