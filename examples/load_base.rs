@@ -8,8 +8,13 @@ use striple::storage::FileStripleIterator;
 use striple::striple::NoKind;
 use striple::anystriple::{AnyStriple, copy_builder_any};
 //use striple::striple::copy_as_kind;
-use striple::striple::StripleIf;
-use striple::striple::OwnedStripleIf;
+use striple::striple::{
+  StripleIf,
+  OwnedStripleIf,
+  StripleFieldsIf,
+  OwnedStripleFieldsIf,
+};
+
 use striple::storage::{FileMode,write_striple_file_ref,RemoveKey,init_any_cipher_stdin};
 #[cfg(feature="opensslpbkdf2")]
 use striple::storage::Pbkdf2;

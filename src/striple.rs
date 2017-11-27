@@ -39,13 +39,70 @@ use serde::{Serializer,Serialize,Deserialize,Deserializer};
 #[cfg(feature="serialize")]
 use base64;
 
+macro_rules! fields_if_0{() => (
+  #[inline]
+  fn get_algo_key(&self) -> &'static [u8] {
+    self.0.get_algo_key()
+  }
+  #[inline]
+  fn get_enc(&self) -> &[u8] {
+    self.0.get_enc()
+  }
+  #[inline]
+  fn get_id(&self) -> &[u8] {
+    self.0.get_id()
+  }
+  #[inline]
+  fn get_from(&self) -> &[u8] {
+    self.0.get_from()
+  }
+  #[inline]
+  fn get_about(&self) -> &[u8] {
+    self.0.get_about()
+  }
+  #[inline]
+  fn get_content<'a>(&'a self) -> &'a Option<BCont<'a>> {
+    self.0.get_content()
+  }
+  #[inline]
+  fn get_content_ids(&self) -> Vec<&[u8]> {
+    self.0.get_content_ids()
+  }
+  #[inline]
+  fn get_key(&self) -> &[u8] {
+    self.0.get_key()
+  }
+  #[inline]
+  fn get_sig(&self) -> &[u8] {
+    self.0.get_sig()
+  }
+  #[inline]
+  fn get_tosig<'a>(&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
+    self.0.get_tosig()
+  }
+  #[inline]
+  fn striple_ser_with_def<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
+    self.0.striple_ser_with_def()
+  }
+  #[inline]
+  fn striple_ser<'a> (&'a self, v : Vec<u8>) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
+    self.0.striple_ser(v)
+  }
+  #[inline]
+  fn striple_def (&self) -> StripleDef {
+    self.0.striple_def()
+  }
+
+    )
+}
+
  
 pub type Result<R> = StdResult<R,Error>;
 /// Striple could be a standard struct, or references to contents from others struct
 /// Trait should not be implemented for other struct (or conformance with test case needed).
 /// Other struct should implement AsStriple (probably to stripleRef).
 /// TODO word on enum to serialize and manage parametric types
-pub trait StripleIf : Debug {
+pub trait StripleIf : StripleFieldsIf {
 
   fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool>;
   fn sign_content(&self, _ : &[u8], _ : &mut Read) -> Result<Vec<u8>>;
@@ -59,7 +116,7 @@ pub trait StripleIf : Debug {
 
 
   /// check signature of striple
-  fn check_sig (&self, from : &StripleIf) -> Result<bool> {
+  fn check_sig(&self, from : &StripleIf) -> Result<bool> {
     Ok(match self.get_tosig() {
       Ok((v, oc)) => {
         let mut cv = Cursor::new(v);
@@ -78,9 +135,16 @@ pub trait StripleIf : Debug {
   }
 
   /// check key of striple
-  fn check_id (&self, from : &StripleIf) -> Result<bool> {
+  fn check_id(&self, from : &StripleIf) -> Result<bool> {
     from.check_id_derivation(self.get_sig(), self.get_id())
   }
+
+}
+
+pub trait StripleFieldsIf : Debug {
+
+  /// get key of striple defining algo scheme
+  fn get_algo_key(&self) -> &'static [u8];
 
   /// get content enc value
   fn get_enc(&self) -> &[u8];
@@ -103,8 +167,6 @@ pub trait StripleIf : Debug {
   /// get striple key value
   fn get_key(&self) -> &[u8];
 
-  /// get key of striple defining algo scheme
-  fn get_algo_key(&self) -> &'static [u8];
 
   /// get striple signature value
   fn get_sig(&self) -> &[u8];
@@ -139,6 +201,86 @@ pub trait StripleIf : Debug {
     }
   }
  
+}
+
+
+pub trait StripleImpl : StripleFieldsIf { 
+  type Kind : StripleKind;
+}
+pub trait InstantiableSelfStripleImpl : OwnedStripleFieldsIf + InstantiableStripleImpl {
+  fn self_init(&mut self) -> Result<()> {
+/*  fn private_key_clone(&self) -> Vec<u8> {
+    self.private_key_ref().to_vec()
+  }
+
+  fn private_key_ref(&self) -> &[u8];
+}*/
+    let (sig,id) = {
+        let priv_k = self.private_key_ref();
+        let (v, obc) = self.get_tosig()?;
+        let mut cv = Cursor::new(v);
+        let sig = match obc {
+          Some (bc) => {
+            let mut r = try!(bc.get_readable());
+            let mut tos = cv.chain(r.trait_read());
+            <<Self as StripleImpl>::Kind as StripleKind>::S::sign_content(priv_k, &mut tos)?
+          },
+          None => <<Self as StripleImpl>::Kind as StripleKind>::S::sign_content(priv_k, &mut cv)?,
+        };
+        let id = <<Self as StripleImpl>::Kind as StripleKind>::D::derive_id(&sig)?;
+        (sig, id)
+      };
+
+      self.init(id.clone(),sig,id);
+
+      Ok(())
+  }
+}
+pub trait InstantiableStripleImpl : StripleImpl + Sized {
+  /// init signing (should not be call directly, is called by default calc_init implementation)
+  fn init(&mut self,
+    from : Vec<u8>,
+    sig : Vec<u8>,
+    id : Vec<u8>);
+
+
+  /// make initial striple sig and key (both struct should be initialized byte vec).
+  fn calc_init<OST : OwnedStripleIf>(&mut self,
+//    contentenc : Vec<u8>,
+    from : &OST,
+ //   about: Option<Vec<u8>>,
+ //   contentids : Vec<Vec<u8>>,
+ //   content : Option<BCont<'static>>,
+  ) -> Result<()> {
+    let sig = from.sign(&(*self))?;
+    let id = from.derive_id(&sig)?;
+
+    self.init(from.get_id().to_vec(),sig,id);
+
+    Ok(())
+ 
+  }
+
+}
+
+impl<SI : StripleImpl> StripleIf for SI {
+
+  #[inline]
+  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool> {
+    <SI::Kind as StripleKind>::S::check_content(&self.get_key(), cont, sig)
+  }
+  #[inline]
+  fn sign_content(&self, pri : &[u8], con : &mut Read) -> Result<Vec<u8>> {
+    <SI::Kind as StripleKind>::S::sign_content(pri, con)
+  }
+  #[inline]
+  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> Result<bool> {
+    <SI::Kind as StripleKind>::D::check_id_derivation(sig,id)
+  }
+  #[inline]
+  fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>> {
+    <SI::Kind as StripleKind>::D::derive_id(sig)
+  }
 }
 
 /// Content wrapper over bytes with Read interface
@@ -306,7 +448,7 @@ pub trait SignatureScheme {
 
 }
 
-pub trait OwnedStripleIf : StripleIf {
+pub trait OwnedStripleFieldsIf : StripleFieldsIf {
 
   /// owned striple has a private key, default implementation is inefficient
   fn private_key_clone(&self) -> Vec<u8> {
@@ -314,9 +456,11 @@ pub trait OwnedStripleIf : StripleIf {
   }
 
   fn private_key_ref(&self) -> &[u8];
+}
 
+pub trait OwnedStripleIf : StripleIf + OwnedStripleFieldsIf {
   /// first parameter is private key, second parameter is content
-  fn sign(&self, st : &StripleIf) -> Result<Vec<u8>> {
+  fn sign<TS : StripleIf> (&self, st : &TS) -> Result<Vec<u8>> {
     let (v, obc) = st.get_tosig()?;
     let mut cv = Cursor::new(v);
     match obc {
@@ -347,7 +491,39 @@ impl<'a, ST : StripleIf> AsStripleIf for (ST, Vec<u8>) {
   }
 }
 
-impl<ST : StripleIf> OwnedStripleIf for (ST, Vec<u8>) {
+impl<ST : StripleIf> OwnedStripleFieldsIf for (ST, Vec<u8>) {
+
+  #[inline]
+  fn private_key_clone(&self) -> Vec<u8> {
+    self.1.clone()
+  }
+
+  #[inline]
+  fn private_key_ref (&self) -> &[u8] {
+    &self.1[..]
+  }
+}
+#[derive(Debug)]
+pub struct SelfOwned<ST>(ST,Vec<u8>);
+impl<ST : InstantiableStripleImpl> StripleImpl for SelfOwned<ST> {
+  type Kind = <ST as StripleImpl>::Kind;
+}
+impl<ST : InstantiableStripleImpl> InstantiableSelfStripleImpl for SelfOwned<ST> {
+}
+impl<ST : InstantiableStripleImpl> InstantiableStripleImpl for SelfOwned<ST> {
+  fn init(&mut self,
+    from : Vec<u8>,
+    sig : Vec<u8>,
+    id : Vec<u8>) {
+    self.0.init(from,sig,id)
+  }
+}
+
+impl<ST : InstantiableStripleImpl> StripleFieldsIf for SelfOwned<ST> {
+  fields_if_0!();
+}
+
+impl<ST : InstantiableStripleImpl> OwnedStripleFieldsIf for SelfOwned<ST> {
 
   #[inline]
   fn private_key_clone(&self) -> Vec<u8> {
@@ -361,7 +537,58 @@ impl<ST : StripleIf> OwnedStripleIf for (ST, Vec<u8>) {
 
 }
 
-impl<'b, ST : StripleIf> OwnedStripleIf for (&'b ST, &'b [u8]) {
+macro_rules! if_0{() => (
+  #[inline]
+  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool> {
+    self.0.check_content(cont,sig)
+  }
+  #[inline]
+  fn sign_content(&self, a : &[u8], b : &mut Read) -> Result<Vec<u8>> {
+    self.0.sign_content(a,b)
+  }
+  #[inline]
+  fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>> {
+    self.0.derive_id(sig)
+  }
+  #[inline]
+  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> Result<bool> {
+    self.0.check_id_derivation(sig,id)
+  }
+  #[inline]
+  fn check (&self, from : &StripleIf) -> Result<bool> {
+    self.0.check(from)
+  }
+  #[inline]
+  fn check_sig(&self, from : &StripleIf) -> Result<bool> {
+    self.0.check_sig(from)
+  }
+  #[inline]
+  fn check_id(&self, from : &StripleIf) -> Result<bool> {
+    self.0.check_id(from)
+  }
+
+
+    )}
+
+impl<ST : StripleIf> StripleIf for (ST, Vec<u8>) {
+  if_0!();
+}
+
+
+impl<ST : StripleIf> StripleFieldsIf for (ST, Vec<u8>) {
+  fields_if_0!();
+}
+
+impl<'b, ST : StripleIf> StripleIf for (&'b ST, &'b [u8]) {
+  if_0!();
+}
+impl<'b, ST : StripleIf> StripleFieldsIf for (&'b ST, &'b [u8]) {
+  fields_if_0!();
+}
+
+
+
+impl<'b, ST : StripleIf> OwnedStripleFieldsIf for (&'b ST, &'b [u8]) {
 
   #[inline]
   fn private_key_clone (&self) -> Vec<u8> {
@@ -372,15 +599,17 @@ impl<'b, ST : StripleIf> OwnedStripleIf for (&'b ST, &'b [u8]) {
   fn private_key_ref (&self) -> &[u8] {
     self.1
   }
-
+}
+impl<'b, ST : StripleIf> OwnedStripleIf for (&'b ST, &'b [u8]) {
 }
 
+impl<ST : StripleIf> OwnedStripleIf for (ST, Vec<u8>) { }
 
 /// Type to use an striple as Public, allowing to sign/create striple from it without others info
 /// (see Ownedstriple implementation). Usage with non public striple will result in error when
 /// signing or worst when checking.
 pub trait PubStriple : StripleIf{}
-
+//impl<T : StripleKind, S : StripleImpl<T>> PubStriple for S where T::S : PublicScheme {}
 impl<K : StripleKind> PubStriple for Striple<K> where K::S : PublicScheme {}
 impl<'a, K : StripleKind> PubStriple for StripleRef<'a,K> where K::S : PublicScheme {}
 /*
@@ -391,7 +620,7 @@ pub struct UnsafePubStriple<'a, S : StripleIf + 'a> (&'a S);
 impl<'a, S : StripleIf> PubStriple for UnsafePubStriple<'a, S> {}
 */
 /// public scheme uses same value for public and private key
-impl<S : PubStriple> OwnedStripleIf for S {
+impl<S : PubStriple> OwnedStripleFieldsIf for S {
 
   fn private_key_clone (&self) -> Vec<u8> {
     self.get_key().to_vec()
@@ -400,6 +629,8 @@ impl<S : PubStriple> OwnedStripleIf for S {
   fn private_key_ref (&self) -> &[u8] {
     self.get_key()
   }
+}
+impl<S : PubStriple> OwnedStripleIf for S {
 }
 
 /// Striple struct object to manipulate an striple
@@ -509,6 +740,17 @@ macro_rules! ser_content(() => (
 );
 
 
+impl<T : StripleKind> InstantiableStripleImpl for Striple<T> {
+  fn init(&mut self,
+    from : Vec<u8>,
+    sig : Vec<u8>,
+    id : Vec<u8>) {
+    self.from = from;
+    self.sig = sig;
+    self.id = id;
+  }
+}
+
 impl<T : StripleKind> Striple<T> {
 
   /// first step is creation of the key pair for this striple.
@@ -518,62 +760,56 @@ impl<T : StripleKind> Striple<T> {
   /// None for `about` is the same as using `from` id.
   /// Return the initialized striple and its private key.
   /// TODO return result (add sign error and bcont error)
-  pub fn new (
+  pub fn new<OST : OwnedStripleIf> (
     contentenc : Vec<u8>,
-    from : Option<&OwnedStripleIf>,
+    from : &OST,
     about: Option<Vec<u8>>,
     contentids : Vec<Vec<u8>>,
     content : Option<BCont<'static>>,
   ) -> Result<(Striple<T>,Vec<u8>)> {
-    let keypair = T::S::new_keypair()?;
+    let (pubkey,prikey) = T::S::new_keypair()?;
     let mut res = Striple {
         contentenc : contentenc,
         id : vec!(),
         from : vec!(),
         sig : vec!(),
         about : about.unwrap_or(vec!()),
-        key : keypair.0,
+        key : pubkey,
         contentids : contentids,
         content : content,
 
         phtype : PhantomData,
     };
+    res.calc_init(from)?;
 
-    let (sig,id) = match from {
-      Some (st) => {
-        let sig = st.sign(&res)?;
-        let id = st.derive_id(&sig)?;
-        (sig, id)
-      },
-      None => {
-        let (v, obc) = res.get_tosig()?;
-        let mut cv = Cursor::new(v);
-        let sig = match obc {
-          Some (bc) => {
-            let mut r = try!(bc.get_readable());
-            let mut tos = cv.chain(r.trait_read());
-            T::S::sign_content(&keypair.1, &mut tos)?
-          },
-          None => T::S::sign_content(&keypair.1, &mut cv)?,
-        };
-        let id = T::D::derive_id(&sig)?;
-        (sig, id)
-      },
-    };
-    res.sig = sig;
-    res.id = id;
-
-    match from {
-      Some (st) => {
-        res.from = st.get_id().to_vec();
-      },
-      None => {
-        res.from = res.id.clone();
-      },
-    };
-
-    Ok((res, keypair.1))
+    Ok((res,prikey))
   }
+  pub fn new_self (
+    contentenc : Vec<u8>,
+    about: Option<Vec<u8>>,
+    contentids : Vec<Vec<u8>>,
+    content : Option<BCont<'static>>,
+  ) -> Result<(Striple<T>,Vec<u8>)> {
+    let (pubkey,prikey) = T::S::new_keypair()?;
+    let mut res = Striple {
+        contentenc : contentenc,
+        id : vec!(),
+        from : vec!(),
+        sig : vec!(),
+        about : about.unwrap_or(vec!()),
+        key : pubkey,
+        contentids : contentids,
+        content : content,
+
+        phtype : PhantomData,
+    };
+    let mut owned = SelfOwned(res,prikey);
+
+    owned.self_init()?;
+
+    Ok((owned.0,owned.1))
+  }
+ 
   // utility to fact code
   ser_content!();
 }
@@ -585,13 +821,14 @@ impl<'a, T : StripleKind> StripleRef<'a, T> {
 }
 
 
+impl<'a,T : StripleKind> StripleImpl for StripleRef<'a,T> {
+  type Kind = T;
+}
+impl<T : StripleKind> StripleImpl for Striple<T> {
+  type Kind = T;
+}
+/*
 impl<T : StripleKind> StripleIf for Striple<T> {
-
-
-  #[inline]
-  fn get_algo_key(&self) -> &'static [u8]{
-    T::get_algo_key()
-  }
   #[inline]
   fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool> {
     T::S::check_content(&self.key, cont, sig)
@@ -609,6 +846,13 @@ impl<T : StripleKind> StripleIf for Striple<T> {
     T::D::derive_id(sig)
   }
  
+}*/
+
+impl<T : StripleKind> StripleFieldsIf for Striple<T> {
+  #[inline]
+  fn get_algo_key(&self) -> &'static [u8]{
+    T::get_algo_key()
+  }
 
   fn striple_ser_with_def<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
     let mut res = Vec::new();
@@ -661,14 +905,11 @@ impl<T : StripleKind> StripleIf for Striple<T> {
     let oc =  self.ser_tosig(&mut res)?;
     Ok((res, oc))
   }
-}
 
+}
+/*
 impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
 
-  #[inline]
-  fn get_algo_key(&self) -> &'static [u8]{
-    T::get_algo_key()
-  }
   #[inline]
   fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool> {
     T::S::check_content(self.key, cont, sig)
@@ -684,6 +925,13 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
   #[inline]
   fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>> {
     T::D::derive_id(sig)
+  }
+}*/
+
+impl<'a,T : StripleKind> StripleFieldsIf for StripleRef<'a,T> {
+  #[inline]
+  fn get_algo_key(&self) -> &'static [u8]{
+    T::get_algo_key()
   }
 
   fn striple_ser_with_def<'b> (&'b self) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
@@ -920,15 +1168,18 @@ pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (byte
     ref_builder(algoenc,r)
   }
 }
- 
+
 /// conversion to stripleif object trait
 /// It is an adapter for cleaner polymorphism
 /// (see AnyStriple impl).
 pub trait AsStripleIf {
   fn as_striple_if(&self) -> &StripleIf;
 }
+/*
+#[derive(Debug)]
+pub struct AdaptAsStriple<'a,T : 'a + AsStripleIf>(&'a T);
 // boilerplate adapter code
-impl<T : AsStripleIf + Debug> StripleIf for T {
+impl<'a,T : 'a + AsStripleIf + Debug> StripleIf for AdaptAsStriple<'a,T> {
   #[inline]
   fn check_content(&self, cont : &mut Read,sig : &[u8]) -> Result<bool> {
     self.as_striple_if().check_content(cont,sig)
@@ -945,6 +1196,9 @@ impl<T : AsStripleIf + Debug> StripleIf for T {
   fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> Result<bool> {
     self.as_striple_if().check_id_derivation(sig,id)
   }
+}
+
+impl<'a,T : 'a + AsStripleIf + Debug> StripleFieldsIf for AdaptAsStriple<'a,T> {
   #[inline]
   fn get_enc(&self) -> &[u8] {
     self.as_striple_if().get_enc()
@@ -962,7 +1216,7 @@ impl<T : AsStripleIf + Debug> StripleIf for T {
     self.as_striple_if().get_about()
   }
   #[inline]
-  fn get_content<'a>(&'a self) -> &'a Option<BCont<'a>> {
+  fn get_content<'b>(&'b self) -> &'b Option<BCont<'b>> {
     self.as_striple_if().get_content()
   }
   #[inline]
@@ -996,7 +1250,7 @@ impl<T : AsStripleIf + Debug> StripleIf for T {
 
 
 }
-
+*/
 /// Trait for structure that could be use as an striple.
 /// A structure can contain multiple striple, that is why the trait is parametric.
 /// TODO user example
@@ -1045,8 +1299,6 @@ impl<'a, T : StripleKind> AsStriple<'a, T> for Striple<T> {
 
         phtype : PhantomData,
     }
-
-
   }
 }
 
@@ -1521,6 +1773,7 @@ pub mod test {
   use striple::striple_copy_dser;
   use striple::StripleRef;
   use striple::StripleIf;
+  use striple::StripleFieldsIf;
   use striple::AsStriple;
   use striple::StripleKind;
   use striple::NoKind;
@@ -1812,9 +2065,8 @@ pub mod test {
   // With test for altering integrity (mut striple).
   pub fn chaining_test<K1 : StripleKind, K2 : StripleKind> () {
     let contentenc = random_bytes(99);
-    let ownedroot : (Striple<K1>, Vec<u8>) = Striple::new(
+    let ownedroot : (Striple<K1>, Vec<u8>) = Striple::new_self(
       contentenc.clone(),
-      None,
       None,
       Vec::new(),
       Some(BCont::OwnedBytes(random_bytes(333))),
@@ -1831,7 +2083,7 @@ pub mod test {
     
      let ownedson1 : (Striple<K1>, Vec<u8>) = Striple::new(
       contentenc.clone(),
-      Some(&(&root,&ownedroot.1[..])),
+      &(&root,&ownedroot.1[..]),
       // random about : no logic here because about is not validated
       Some(random_bytes(9)),
       // random contentids
@@ -1845,7 +2097,7 @@ pub mod test {
 
     let ownedson2 : (Striple<K2>, Vec<u8>) = Striple::new(
       contentenc.clone(),
-      Some(&(&root,&ownedroot.1[..])),
+      &(&root,&ownedroot.1[..]),
       // random about : no logic here because about is not validated
       Some(random_bytes(7)),
       // random contentids
@@ -1863,7 +2115,7 @@ pub mod test {
 
     let ownedson21 : (Striple<K1>, Vec<u8>) = Striple::new(
       contentenc.clone(),
-      Some(&(&son2,&ownedson2.1[..])),
+      &(&son2,&ownedson2.1[..]),
       // random about : no logic here because about is not validated
       Some(vec!(4,4,3,4)),
       // random contentids
@@ -1877,7 +2129,7 @@ pub mod test {
 
     let ownedson22 : (Striple<K2>, Vec<u8>) = Striple::new(
       contentenc.clone(),
-      Some(&(&son2,&ownedson2.1[..])),
+      &(&son2,&ownedson2.1[..]),
       // random about : no logic here because about is not validated
       Some(vec!(4,4,3,4)),
       // random contentids
@@ -1891,7 +2143,7 @@ pub mod test {
 
     let ownedson22bis : (Striple<K2>, Vec<u8>) = Striple::new(
       contentenc.clone(),
-      Some(&(&son2,&ownedson2.1[..])),
+      &(&son2,&ownedson2.1[..]),
       // random about : no logic here because about is not validated
       Some(vec!(4,4,3,4)),
       // random contentids

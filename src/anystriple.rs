@@ -20,6 +20,8 @@ use striple::{
   StripleKind,
   AsStriple,
   StripleIf,
+  StripleDef,
+  StripleFieldsIf,
   OwnedStripleIf,
   ErrorKind
 };
@@ -156,6 +158,133 @@ impl AsStripleIf for $en {
   }
 }
 
+impl StripleFieldsIf for $en {
+  #[inline]
+  fn get_algo_key(&self) -> &'static [u8] {
+    match self {
+      $( & $en::$st(ref i) => i.get_algo_key(), )*
+    }
+  }
+  #[inline]
+  fn get_enc(&self) -> &[u8] {
+    match self {
+      $( & $en::$st(ref i) => i.get_enc(), )*
+    }
+  }
+  #[inline]
+  fn get_id(&self) -> &[u8] {
+    match self {
+      $( & $en::$st(ref i) => i.get_id(), )*
+    }
+  }
+  #[inline]
+  fn get_from(&self) -> &[u8] {
+    match self {
+      $( & $en::$st(ref i) => i.get_from(), )*
+    }
+  }
+  #[inline]
+  fn get_about(&self) -> &[u8] {
+    match self {
+      $( & $en::$st(ref i) => i.get_about(), )*
+    }
+  }
+  #[inline]
+  fn get_content<'a>(&'a self) -> &'a Option<BCont<'a>> {
+    match self {
+      $( & $en::$st(ref i) => i.get_content(), )*
+    }
+  }
+  #[inline]
+  fn get_content_ids(&self) -> Vec<&[u8]> {
+    match self {
+      $( & $en::$st(ref i) => i.get_content_ids(), )*
+    }
+  }
+  #[inline]
+  fn get_key(&self) -> &[u8] {
+    match self {
+      $( & $en::$st(ref i) => i.get_key(), )*
+    }
+  }
+  #[inline]
+  fn get_sig(&self) -> &[u8] {
+    match self {
+      $( & $en::$st(ref i) => i.get_sig(), )*
+    }
+  }
+  #[inline]
+  fn get_tosig<'a>(&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
+    match self {
+      $( & $en::$st(ref i) => i.get_tosig(), )*
+    }
+  }
+  #[inline]
+  fn striple_ser_with_def<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
+    match self {
+      $( & $en::$st(ref i) => i.striple_ser_with_def(), )*
+    }
+  }
+  #[inline]
+  fn striple_ser<'a> (&'a self, v : Vec<u8>) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
+    match self {
+      $( & $en::$st(ref i) => i.striple_ser(v), )*
+    }
+  }
+  #[inline]
+  fn striple_def (&self) -> StripleDef {
+    match self {
+      $( & $en::$st(ref i) => i.striple_def(), )*
+    }
+  }
+}
+impl StripleIf for $en {
+  #[inline]
+  fn check_content(&self, cont : &mut Read, sig : &[u8]) -> Result<bool> {
+    match self {
+      $( & $en::$st(ref i) => i.check_content(cont,sig), )*
+    }
+  }
+  #[inline]
+  fn sign_content(&self, a : &[u8], b : &mut Read) -> Result<Vec<u8>> {
+    match self {
+      $( & $en::$st(ref i) => i.sign_content(a,b), )*
+    }
+  }
+  #[inline]
+  fn derive_id(&self, sig : &[u8]) -> Result<Vec<u8>> {
+    match self {
+      $( & $en::$st(ref i) => i.derive_id(sig), )*
+    }
+  }
+  #[inline]
+  fn check_id_derivation(&self, sig : &[u8], id : &[u8]) -> Result<bool> {
+    match self {
+      $( & $en::$st(ref i) => i.check_id_derivation(sig,id), )*
+    }
+  }
+  #[inline]
+  fn check (&self, from : &StripleIf) -> Result<bool> {
+    match self {
+      $( & $en::$st(ref i) => i.check(from), )*
+    }
+  }
+  #[inline]
+  fn check_sig(&self, from : &StripleIf) -> Result<bool> {
+    match self {
+      $( & $en::$st(ref i) => i.check_sig(from), )*
+    }
+  }
+  #[inline]
+  fn check_id(&self, from : &StripleIf) -> Result<bool> {
+    match self {
+      $( & $en::$st(ref i) => i.check_id(from), )*
+    }
+  }
+
+
+}
+
 ));
 
 
@@ -191,11 +320,48 @@ pub fn copy_builder_any(algoid :&[u8], sr : StripleRef<NoKind>) -> Result<AnyStr
 }
 
 impl AnyStriple {
-  /// contstructor over typed striple one
-  pub fn new (
+
+  pub fn new_self (
     algoid :&[u8], 
     contentenc : Vec<u8>,
-    from : Option<&OwnedStripleIf>,
+    about: Option<Vec<u8>>,
+    contentids : Vec<Vec<u8>>,
+    content : Option<BCont<'static>>,
+  ) -> Result<(AnyStriple,Vec<u8>)> {
+  match algoid {
+    i if (i == Rsa2048Sha512::get_algo_key()) => {
+      let (s, p) = try!(Striple::new_self(contentenc, about, contentids, content));
+      Ok((AnyStriple::StripleRsa(s), p))
+    },
+    i if (i == EcdsaRipemd160::get_algo_key()) => {
+      let (s, p) = try!(Striple::new_self(contentenc, about, contentids, content));
+      Ok((AnyStriple::StripleECDSA(s), p))
+    },
+    i if (i == PubSha512::get_algo_key()) => {
+      let (s, p) = try!(Striple::new_self(contentenc, about, contentids, content));
+      Ok((AnyStriple::StriplePSha512(s), p))
+    },
+    i if (i == PubSha256::get_algo_key()) => {
+      let (s, p) = try!(Striple::new_self(contentenc, about, contentids, content));
+      Ok((AnyStriple::StriplePSha256(s), p))
+    },
+    i if (i == PubRipemd::get_algo_key()) => {
+      let (s, p) = try!(Striple::new_self(contentenc, about, contentids, content));
+      Ok((AnyStriple::StriplePRIP(s), p))
+    },
+    _ => {
+      Err(Error("Unresolved kind and no default kind defined".to_string(), ErrorKind::UnexpectedStriple, None))
+    },
+  }
+
+  }
+
+
+  /// contstructor over typed striple one
+  pub fn new<OST : OwnedStripleIf> (
+    algoid :&[u8], 
+    contentenc : Vec<u8>,
+    from : &OST,
     about: Option<Vec<u8>>,
     contentids : Vec<Vec<u8>>,
     content : Option<BCont<'static>>,

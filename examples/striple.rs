@@ -30,7 +30,16 @@ use std::fs;
 use std::path;
 use std::io::{Read,Write,Seek,SeekFrom};
 use striple::anystriple::{AnyStriple, copy_builder_any};
-use striple::striple::{BCont,NoKind,StripleDisp,StripleIf,OwnedStripleIf,StripleRef};
+use striple::striple::{
+  BCont,
+  NoKind,
+  StripleDisp,
+  StripleIf,
+  StripleFieldsIf,
+  OwnedStripleIf,
+  OwnedStripleFieldsIf,
+  StripleRef,
+};
 #[cfg(feature="serialize")]
 #[macro_use]
 extern crate serde_derive;
@@ -390,18 +399,27 @@ fn run() {
      None
    };
 //   let owfrom : Option<&OwnedStripleIf>= ofrom.as_ref();
-   let owfrom : Option<&OwnedStripleIf> = match ofrom {
-     Some(ref f) => Some (f),
-     None => None,
+   let owned_striple : (AnyStriple, Vec<u8>) = match ofrom {
+     Some(ref f) => {
+       AnyStriple::new(
+            &kindid[..],
+            encid,
+            f,
+            aboutid,
+            contentids,
+            content,
+         ).unwrap()
+     },
+     None => {
+      AnyStriple::new_self(
+            &kindid[..],
+            encid,
+            aboutid,
+            contentids,
+            content,
+         ).unwrap()
+     },
    };
-   let owned_striple : (AnyStriple, Vec<u8>) = AnyStriple::new(
-      &kindid[..],
-      encid,
-      owfrom,
-      aboutid,
-      contentids,
-      content,
-   ).unwrap();
    if args.flag_out.len() > 0 {
      let mut contents = Vec::new();
      contents.push((owned_striple.0,Some(owned_striple.1)));

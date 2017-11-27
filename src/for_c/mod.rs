@@ -14,7 +14,17 @@
 //! TODO return error : cf all unwrap_or(false)
 
 
-use striple::{StripleIf,OwnedStripleIf,BCont,striple_dser_with_def,NoKind,StripleRef,Error};
+use striple::{
+  StripleIf,
+  StripleFieldsIf,
+  OwnedStripleIf,
+  OwnedStripleFieldsIf,
+  BCont,
+  striple_dser_with_def,
+  NoKind,
+  StripleRef,
+  Error
+};
 use anystriple::{AnyStriple,copy_builder_any};
 use std::mem::transmute;
 use storage::{FileStripleIterator,init_any_cipher_stdin,AnyCyphers};
@@ -245,25 +255,38 @@ pub unsafe extern "C" fn new_striple(
   
   let algo = Vec::from_raw_parts(algoid, algo_l as usize , algo_l as usize);
   let enc = Vec::from_raw_parts(contentenc, cenc_l as usize , cenc_l as usize);
-  let rfrom : Option<&OwnedStripleIf> = match from {
+  let rfrom = match from {
     Some(ptr) => {
       let ef : &(AnyStriple, Vec<u8>) = transmute(ptr.0);
-      Some(&(*ef))
+      Some(ef)
     },
     None => None,
   };
   let rabout = about.map(|a|Vec::from_raw_parts(a, about_l as usize, about_l as usize));
  
-  let oany = AnyStriple::new(
+  let oany = if let Some(from) = rfrom {
+    AnyStriple::new(
     &algo[..],
     enc,
-    rfrom,
+    from,
     rabout,
     // no contentids TODO complete !!!
     vec!(),
     // Bcont TODO complete!!!
     None,
-    ).ok();
+    ).ok()
+  } else {
+  AnyStriple::new_self(
+    &algo[..],
+    enc,
+    rabout,
+    // no contentids TODO complete !!!
+    vec!(),
+    // Bcont TODO complete!!!
+    None,
+    ).ok()
+
+  };
     match oany {
       Some(a) => {
         Some(owned_striple_ptr(&a))

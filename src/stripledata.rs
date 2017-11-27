@@ -10,7 +10,13 @@
 //!
 
 use striple::Striple;
-use striple::{StripleKind,NoKind};
+use striple::{
+  StripleFieldsIf,
+  OwnedStripleFieldsIf,
+  OwnedStripleIf,
+  StripleKind,
+  NoKind,
+};
 use striple::{StripleIf};
 use striple::{ref_builder_id_copy};
 #[cfg(feature="serialize")]
