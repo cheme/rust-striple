@@ -755,8 +755,8 @@ pub fn init_any_cipher_stdin<R: Read> (file : &mut R, _ : ()) -> Result<AnyCyphe
 }
 
 
-
-// TODO switch to associated types
+// TODO switch to associated types TODO remove SK as it is unsafely cast and currently always init
+// to NoKind
 pub struct FileStripleIterator<SK : StripleKind, T : StripleIf, R : Read + Seek, C : StorageCypher, B> (pub R, pub C, pub B, PhantomData<SK>, pub u64)
   where B : Fn(&[u8], StripleRef<SK>) -> Result<T>;
   //where B : Fn(&[u8], Striple<SK>) -> Result<T, StripleError>;

@@ -16,7 +16,7 @@ name = "striple"
 crate-type = ["rlib", "dylib"]
 
 [features]
-default = ["public_crypto","serialize","public_openssl","cryptoecdsa","opensslrsa","opensslpbkdf2","for_c"]
+default = ["any_base","public_crypto","serialize","public_openssl","cryptoecdsa","opensslrsa","opensslpbkdf2","for_c"]
 #default = ["public_crypto","serialize","cryptoecdsa","for_c"]
 #default = ["serialize","public_openssl","opensslrsa","opensslpbkdf2","for_c"]
 #default = []
@@ -27,6 +27,9 @@ cryptoecdsa = ["rust-crypto"]
 public_crypto = ["uuid","rust-crypto"]
 public_openssl = ["uuid","openssl"]
 for_c = ["libc"]
+any_base = []
+any_base_no_panic = []
+any_base_no_check = []
 
 [[example]]
 name='genbasestriples'

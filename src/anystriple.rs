@@ -3,12 +3,18 @@
 //! This implementation does not include type defined externally and is very likelly to be
 //! overriden in applications.
 //!
-
+use std::env;
+use std::fs::File;
 use stripledata;
+use storage::{
+  FileStripleIterator,
+  init_noread_key,
+  init_any_cipher_stdin,
+};
 use std::io::Read;
-use striple::SignatureScheme;
 use striple::IDDerivation;
 use striple::{
+  SignatureScheme,
   NoSigCh,
   NoIDDer,
   BCont,
@@ -24,7 +30,10 @@ use striple::{
   StripleDef,
   StripleFieldsIf,
   OwnedStripleIf,
-  ErrorKind
+  ErrorKind,
+  from_error,
+  from_option,
+  ref_builder_id_copy,
 };
 use striple::NoKind;
 use striple::Result;
@@ -57,16 +66,145 @@ pub type StriplePRIP = Striple<PubRipemd>;
 pub type StriplePRIP = Striple<NoKind>;
 
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Eq)]
 pub struct Rsa2048Sha512;
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Eq)]
 pub struct EcdsaRipemd160;
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Eq)]
 pub struct PubSha512;
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Eq)]
 pub struct PubSha256;
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Eq)]
 pub struct PubRipemd;
+
+#[derive(Debug,Clone)]
+pub struct BaseStriples {
+  pub root : (AnyStriple, Option<Vec<u8>>),
+  pub pubcat : (AnyStriple, Option<Vec<u8>>),
+  pub pubkind : (AnyStriple, Option<Vec<u8>>),
+  pub libcat : (AnyStriple, Option<Vec<u8>>),
+  pub libkind : (AnyStriple, Option<Vec<u8>>),
+  pub libkinds : KindStriples,
+  pub pubkinds : KindStriples,
+  pub others : Vec<(AnyStriple, Option<Vec<u8>>)>,
+}
+#[derive(Debug,Clone)]
+pub struct KindStriples {
+  pub kind : (AnyStriple, Option<Vec<u8>>),
+  pub pubripemd : (AnyStriple, Option<Vec<u8>>),
+  pub pubsha512 : (AnyStriple, Option<Vec<u8>>),
+  pub pubsha256 : (AnyStriple, Option<Vec<u8>>),
+  pub rsa2048_sha512 : (AnyStriple, Option<Vec<u8>>),
+  pub ecdsaripemd160 : (AnyStriple, Option<Vec<u8>>),
+}
+
+/// read base striple panicking on error, to read safely, do not use BASE_STRIPLES static
+fn init_base_striple(check : bool) -> Result<BaseStriples> {
+  let path = from_error(env::var("STRIPLE_BASE"))?;
+  let datafile = from_error(File::open(path))?;
+  // get striple without key and without Kind (as we define it)
+  let rit : StdResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_> = FileStripleIterator::init(datafile, copy_builder_any, &init_any_cipher_stdin, ()); 
+  let mut it = rit?;
+  let root = from_option(it.next())?;
+  let pubcat = from_option(it.next())?;
+  let pubkind = from_option(it.next())?;
+  let libcat = from_option(it.next())?;
+  let libkind = from_option(it.next())?;
+
+  let kind = from_option(it.next())?;
+  let pubripemd = from_option(it.next())?;
+  let pubsha512 = from_option(it.next())?;
+  let pubsha256 = from_option(it.next())?;
+  let rsa2048_sha512 = from_option(it.next())?;
+  let ecdsaripemd160 = from_option(it.next())?;
+  let libkinds = KindStriples {
+    kind,
+    pubripemd,
+    pubsha512,
+    pubsha256,
+    rsa2048_sha512,
+    ecdsaripemd160,
+  };
+  let kind = from_option(it.next())?;
+  let pubripemd = from_option(it.next())?;
+  let pubsha512 = from_option(it.next())?;
+  let pubsha256 = from_option(it.next())?;
+  let rsa2048_sha512 = from_option(it.next())?;
+  let ecdsaripemd160 = from_option(it.next())?;
+  let pubkinds = KindStriples {
+    kind,
+    pubripemd,
+    pubsha512,
+    pubsha256,
+    rsa2048_sha512,
+    ecdsaripemd160,
+  };
+
+  if check {
+    let mut ok = true;
+    ok &= libcat.0.check(&root.0)?;
+    ok &= libcat.0.check(&root.0)?;
+    ok &= libkinds.kind.0.check(&root.0)?;
+    ok &= libkinds.pubripemd.0.check(&libkinds.kind.0)?;
+    ok &= libkinds.pubsha512.0.check(&libkinds.kind.0)?;
+    ok &= libkinds.pubsha256.0.check(&libkinds.kind.0)?;
+    ok &= libkinds.rsa2048_sha512.0.check(&libkinds.kind.0)?;
+    ok &= libkinds.ecdsaripemd160.0.check(&libkinds.kind.0)?;
+    ok &= pubkinds.kind.0.check(&root.0)?;
+    ok &= pubkinds.pubripemd.0.check(&pubkinds.kind.0)?;
+    ok &= pubkinds.pubsha512.0.check(&pubkinds.kind.0)?;
+    ok &= pubkinds.pubsha256.0.check(&pubkinds.kind.0)?;
+    ok &= pubkinds.rsa2048_sha512.0.check(&pubkinds.kind.0)?;
+    ok &= pubkinds.ecdsaripemd160.0.check(&pubkinds.kind.0)?;
+    if !ok {
+      return Err(Error(format!("Base striples does not check"), ErrorKind::UnexpectedStriple, None))
+    }
+  }
+
+  Ok(BaseStriples {
+    root,
+    pubcat, 
+    pubkind,
+    libcat,
+    libkind,
+    libkinds,
+    pubkinds,
+    others : it.collect(),
+  })
+/*  write_striple_with_enc(&cypher,&pribase.root.0,Some(&pribase.root.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubcat,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubkind,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pribase.libcat.0,Some(&pribase.libcat.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&pribase.libkind.0,Some(&pribase.libkind.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.kind.0,Some(&prikinds.kind.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.pubripemd.0,Some(&prikinds.pubripemd.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.pubsha512.0,Some(&prikinds.pubsha512.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.pubsha256.0,Some(&prikinds.pubsha256.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.rsa2048_sha512.0,Some(&prikinds.rsa2048_sha512.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&prikinds.ecdsaripemd160.0,Some(&prikinds.ecdsaripemd160.1),&mut datafile, &private_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.kind,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.pubripemd,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.pubsha512,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.pubsha256,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.rsa2048_sha512,None,&mut datafile, &public_enc).unwrap();
+  write_striple_with_enc(&cypher,&pubstriples.ecdsaripemd160,None,&mut datafile, &public_enc).unwrap();
+*/
+
+}
+#[cfg(feature="any_base")]
+lazy_static!{
+pub static ref BASE_STRIPLES : BaseStriples = init_base_striple(true).unwrap();
+}
+#[cfg(feature="any_base_no_panic")]
+lazy_static!{
+pub static ref BASE_STRIPLES_NO_PANIC : Result<BaseStriples> = init_base_striple(true);
+}
+
+#[cfg(feature="any_base_no_check")]
+lazy_static!{
+pub static ref BASE_STRIPLES : BaseStriples = init_base_striple(false).unwrap();
+}
+
 
 /// Only access to its striple but no implementation
 #[cfg(not(feature="opensslrsa"))]

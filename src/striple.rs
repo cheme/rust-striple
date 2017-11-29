@@ -1748,7 +1748,7 @@ pub enum ErrorKind {
 // redundant def (type alias...).
 
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Eq)]
 /// Utility kind (mostly when deserializing), to get invalid striple (striple without a kind)
 pub struct NoKind;
 #[derive(Debug,Clone)]
