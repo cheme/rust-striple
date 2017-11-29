@@ -61,7 +61,7 @@ macro_rules! fields_if_0{() => (
     self.0.get_about()
   }
   #[inline]
-  fn get_content<'a>(&'a self) -> &'a Option<BCont<'a>> {
+  fn get_content<'a>(&'a self) -> Option<&'a BCont<'a>> {
     self.0.get_content()
   }
   #[inline]
@@ -77,9 +77,10 @@ macro_rules! fields_if_0{() => (
     self.0.get_sig()
   }
   #[inline]
-  fn get_tosig<'a>(&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
-    self.0.get_tosig()
+  fn ser_tosig<'a>(&'a self, res : &mut Vec<u8>) -> Result<Option<&'a BCont<'a>>> {
+    self.0.ser_tosig(res)
   }
+
   #[inline]
   fn striple_ser_with_def<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
     self.0.striple_ser_with_def()
@@ -221,7 +222,7 @@ pub trait StripleFieldsIf : Debug {
   fn get_about(&self) -> &[u8];
 
   /// get content value
-  fn get_content<'a>(&'a self) -> &'a Option<BCont<'a>>;
+  fn get_content<'a>(&'a self) -> Option<&'a BCont<'a>>;
 
   /// get content ids value
   fn get_content_ids(&self) -> Vec<&[u8]>;
@@ -232,19 +233,67 @@ pub trait StripleFieldsIf : Debug {
   /// get striple signature value
   fn get_sig(&self) -> &[u8];
 
-  // TODO test where decode from ser to striple, then check getbytes is allways the same
-  // (sig to) 
-  /// get bytes which must be signed
-  /// TODO plus optional File or return Chain<Read> : that is better as we already copy mem -> use
-  /// array of bcontread
-  fn get_tosig<'a>(&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)>;
+  fn ser_tosig<'a> (&'a self, res : &mut Vec<u8>) -> Result<Option<&'a BCont<'a>>> {
+    // never encode the same value for about and id
+    if self.get_id() != self.get_about() {
+      res.append(&mut self.get_about().to_vec());
+    }
+    res.append(&mut self.get_key().to_vec());
+    
+    for cid in self.get_content_ids().iter(){
+      res.append(&mut cid.to_vec());
+    };
+    // TODO very fishy
+    let (con, ocon) = match self.get_content() {
+      Some(ref c) => {
+        let (ser, _) = c.copy_ser()?;
+        if ser {
+          let b = c.get_byte()?;
+          (Some(b),None)
+        } else {
+          (None,self.get_content())
+        }
+      },
+      None => {
+        (None,None)
+      },
+    };
+    con.map(|c|res.append(&mut c.to_vec()));
+    Ok((ocon))
+  }
 
-  fn striple_ser_with_def<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)>;
+  #[inline]
+  /// get bytes which must be signed
+  /// TODO return chain of read??(cursor over slices) -> todo self implement it to get two ix only
+  /// (current slice and ix in current slice)
+  fn get_tosig<'a>(&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
+    let mut res = Vec::new();
+    let ocont = self.ser_tosig(&mut res)?;
+    Ok((res,ocont))
+  }
+
   /// encode to bytes, but only striple content : Vec<u8> only include striple info.
   /// Might do others operation (like moving a file in a right container.
   /// If BCont is a Path, the path is written with a 2byte xtendsize before
-  /// TODO ser with filename
-  fn striple_ser<'a> (&'a self, Vec<u8>) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)>;
+  fn striple_ser_with_def<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
+    let mut res = Vec::new();
+    push_id(&mut res, self.get_algo_key());
+    push_id(&mut res, &self.get_enc());
+    ser_stripledesc(&self.striple_def(), &mut res)?;
+    let r = self.striple_ser(res)?;
+
+    Ok(r)
+  }
+
+  fn striple_ser<'a> (&'a self, mut res : Vec<u8>) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
+    res.append(&mut self.get_id().to_vec());
+    res.append(&mut self.get_from().to_vec());
+    res.append(&mut self.get_sig().to_vec());
+
+    let ocon = self.ser_tosig(&mut res)?;
+
+    Ok((res,ocon))
+  }
 
   fn striple_def (&self) -> StripleDef {
     StripleDef {
@@ -791,39 +840,6 @@ pub fn ser_stripledesc (d : &StripleDef, res : &mut Vec<u8>) -> Result<()> {
   Ok(())
 }
 
-// identic code for stripleref and striple   
-macro_rules! ser_content(() => (
-  #[inline]
-  fn ser_tosig<'b> (&'b self, res : &mut Vec<u8>) -> Result<Option<&'b BCont<'b>>> {
-
-    // never encode the same value for about and id
-    if self.id != self.about {
-      res.append(&mut self.about.to_vec());
-    }
-    res.append(&mut self.key.to_vec());
-    
-    for cid in self.contentids.iter(){
-      res.append(&mut cid.to_vec());
-    };
-    let (con, ocon) = match self.content {
-      Some(ref c) => {
-        let (ser, _) = c.copy_ser()?;
-        if ser {
-          let b = c.get_byte()?;
-          (Some(b),None)
-        } else {
-          (None,self.content.as_ref())
-        }
-      },
-      None => {
-        (None,None)
-      },
-    };
-    con.map(|c|res.append(&mut c.to_vec()));
-    Ok(ocon)
-  }
-)
-);
 
 
 impl<T : StripleKind> InstantiableStripleImpl for Striple<T> {
@@ -896,14 +912,6 @@ impl<T : StripleKind> Striple<T> {
     Ok((owned.0,owned.1))
   }
  
-  // utility to fact code
-  ser_content!();
-}
-
-impl<'a, T : StripleKind> StripleRef<'a, T> {
-
-  // utility to fact code
-  ser_content!();
 }
 
 
@@ -940,25 +948,6 @@ impl<T : StripleKind> StripleFieldsIf for Striple<T> {
     T::get_algo_key()
   }
 
-  fn striple_ser_with_def<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
-    let mut res = Vec::new();
-    push_id(&mut res, <T as StripleKind>::get_algo_key());
-    push_id(&mut res, &self.contentenc);
-    ser_stripledesc(&self.striple_def(), &mut res)?;
-    let r = self.striple_ser(res)?;
-
-    Ok(r)
-  }
-
-  fn striple_ser<'a> (&'a self, mut res : Vec<u8>) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
-    res.append(&mut self.id.to_vec());
-    res.append(&mut self.from.to_vec());
-    res.append(&mut self.sig.to_vec());
-
-    let ocon = self.ser_tosig(&mut res)?;
-
-    Ok((res,ocon))
-  }
  
   #[inline]
   fn get_key(&self) -> &[u8]{&self.key}
@@ -979,17 +968,12 @@ impl<T : StripleKind> StripleFieldsIf for Striple<T> {
   #[inline]
   fn get_enc(&self) -> &[u8] {&self.contentenc}
   #[inline]
-  fn get_content<'a>(&'a self) -> &'a Option<BCont<'a>> {
-    &self.content
+  fn get_content<'a>(&'a self) -> Option<&'a BCont<'a>> {
+    self.content.as_ref()
   }
   #[inline]
   fn get_content_ids(&self) -> Vec<&[u8]> {
     self.contentids.iter().map(|r|&r[..]).collect()
-  }
-  fn get_tosig<'a>(&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
-    let mut res = Vec::new();
-    let oc =  self.ser_tosig(&mut res)?;
-    Ok((res, oc))
   }
 
 }
@@ -1020,26 +1004,7 @@ impl<'a,T : StripleKind> StripleFieldsIf for StripleRef<'a,T> {
     T::get_algo_key()
   }
 
-  fn striple_ser_with_def<'b> (&'b self) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
-    let mut res = Vec::new();
-    push_id(&mut res, <T as StripleKind>::get_algo_key());
-    push_id(&mut res, &self.contentenc);
-    ser_stripledesc(&self.striple_def(), &mut res)?;
-    let r = self.striple_ser(res)?;
 
-    Ok(r)
-  }
-
-  fn striple_ser<'b> (&'b self, mut res : Vec<u8>) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
-    res.append(&mut self.id.to_vec());
-    res.append(&mut self.from.to_vec());
-    res.append(&mut self.sig.to_vec());
-
-    let ocon = self.ser_tosig(&mut res)?;
-
-    Ok((res,ocon))
-  }
- 
   #[inline]
   fn get_key(&self) -> &[u8]{self.key}
   #[inline]
@@ -1059,17 +1024,11 @@ impl<'a,T : StripleKind> StripleFieldsIf for StripleRef<'a,T> {
   #[inline]
   fn get_enc(&self) -> &[u8] {self.contentenc}
   #[inline]
-  fn get_content<'b>(&'b self) -> &'b Option<BCont<'b>> {
-    &self.content
+  fn get_content<'b>(&'b self) -> Option<&'b BCont<'b>> {
+    self.content.as_ref()
   }
   #[inline]
   fn get_content_ids(&self) -> Vec<&[u8]> {self.contentids.clone()}
-  #[inline]
-  fn get_tosig<'b>(&'b self) -> Result<(Vec<u8>,Option<&'b BCont<'b>>)> {
-    let mut res = Vec::new();
-    let oc = self.ser_tosig(&mut res)?;
-    Ok((res, oc))
-  }
 }
 
 /// deserialize to reference striple without and kind resolution (cast to kind of required kind)
@@ -2400,8 +2359,8 @@ impl<'a,  S : StripleIf> Display for StripleDisp<'a, S> {
 }
 
 #[inline]
-fn truncated_content<'a> ( ocont : &Option<BCont<'a>>)-> Vec<u8> {
-  ocont.as_ref().map_or(vec!(),|cont|{
+fn truncated_content<'a> ( ocont : Option<&BCont<'a>>)-> Vec<u8> {
+  ocont.map_or(vec!(),|cont|{
     match cont.get_readable() {
       Ok(BContRead::Bytes(mut b)) => {
         let r = &mut [0; 300];

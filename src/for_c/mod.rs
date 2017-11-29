@@ -155,7 +155,7 @@ pub unsafe extern "C" fn get_content(st : striple_ptr) -> striple_bcont {
   //let s : &StripleIf = transmute(st);
   let s : &AnyStriple = transmute(st.0);
   let os = s.get_content();
-  os.as_ref().map(|s|
+  os.map(|s|
   match s {
     &BCont::OwnedBytes(ref b) => {
       striple_bcont {

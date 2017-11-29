@@ -330,7 +330,7 @@ impl StripleFieldsIf for $en {
     }
   }
   #[inline]
-  fn get_content<'a>(&'a self) -> &'a Option<BCont<'a>> {
+  fn get_content<'a>(&'a self) -> Option<&'a BCont<'a>> {
     match self {
       $( & $en::$st(ref i) => i.get_content(), )*
     }
@@ -354,9 +354,9 @@ impl StripleFieldsIf for $en {
     }
   }
   #[inline]
-  fn get_tosig<'a>(&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
+  fn ser_tosig<'a>(&'a self, res : &mut Vec<u8>) -> Result<(Option<&'a BCont<'a>>)> {
     match self {
-      $( & $en::$st(ref i) => i.get_tosig(), )*
+      $( & $en::$st(ref i) => i.ser_tosig(res), )*
     }
   }
   #[inline]
