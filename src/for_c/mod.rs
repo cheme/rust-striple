@@ -128,13 +128,30 @@ pub unsafe extern "C" fn $en(st : striple_ptr) -> striple_bytes {
 
 )
 );
+macro_rules! getter2(($en:ident) => (
+
+#[no_mangle]
+pub unsafe extern "C" fn $en(st : striple_ptr) -> striple_bytes {
+  //let s : &StripleIf = transmute(st);
+  let disp : *const () = transmute(st.0);
+  println!("get from : {:?}",disp);
+  let s : &AnyStriple = transmute(st.0); // Note that it is also somehow fine for (AnyStriple,Vec<u8>), but in most case we should convert owned striple to its striple (no polymorphism here).
+  let b = s.$en();
+  striple_bytes{
+    bytes : transmute(b.as_ref().as_ptr()),
+    length : b.len() as size_t,
+  }
+}
+
+)
+);
  
 
 getter!(get_enc);
 getter!(get_id);
 getter!(get_about);
 getter!(get_key);
-getter!(get_algo_key);
+getter2!(get_algo_key);
 getter!(get_sig);
 
 

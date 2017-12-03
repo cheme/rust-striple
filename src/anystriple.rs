@@ -14,6 +14,7 @@ use storage::{
 use std::io::Read;
 use striple::IDDerivation;
 use striple::{
+  ByteSlice,
   SignatureScheme,
   NoSigCh,
   NoIDDer,
@@ -300,13 +301,13 @@ impl AsStripleIf for $en {
 
 impl StripleFieldsIf for $en {
   #[inline]
-  fn get_algo_key(&self) -> &'static [u8] {
+  fn get_algo_key(&self) -> ByteSlice {
     match self {
       $( & $en::$st(ref i) => i.get_algo_key(), )*
     }
   }
   #[inline]
-  fn get_enc(&self) -> &[u8] {
+  fn get_enc(&self) -> ByteSlice {
     match self {
       $( & $en::$st(ref i) => i.get_enc(), )*
     }
@@ -318,13 +319,13 @@ impl StripleFieldsIf for $en {
     }
   }
   #[inline]
-  fn get_from(&self) -> &[u8] {
+  fn get_from(&self) -> ByteSlice {
     match self {
       $( & $en::$st(ref i) => i.get_from(), )*
     }
   }
   #[inline]
-  fn get_about(&self) -> &[u8] {
+  fn get_about(&self) -> ByteSlice {
     match self {
       $( & $en::$st(ref i) => i.get_about(), )*
     }

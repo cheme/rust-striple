@@ -20,6 +20,7 @@ use std::io::Cursor;
 use std::fs::File;
 use std::path::PathBuf;
 use std::fs::metadata;
+use std::ops::Deref;
 //use self::defaultStripleDefImpl::*;
  
 pub const NOKEY : &'static [u8] = &[];
@@ -41,11 +42,11 @@ use base64;
 
 macro_rules! fields_if_0{() => (
   #[inline]
-  fn get_algo_key(&self) -> &'static [u8] {
+  fn get_algo_key(&self) -> ByteSlice {
     self.0.get_algo_key()
   }
   #[inline]
-  fn get_enc(&self) -> &[u8] {
+  fn get_enc(&self) -> ByteSlice {
     self.0.get_enc()
   }
   #[inline]
@@ -53,11 +54,11 @@ macro_rules! fields_if_0{() => (
     self.0.get_id()
   }
   #[inline]
-  fn get_from(&self) -> &[u8] {
+  fn get_from(&self) -> ByteSlice {
     self.0.get_from()
   }
   #[inline]
-  fn get_about(&self) -> &[u8] {
+  fn get_about(&self) -> ByteSlice {
     self.0.get_about()
   }
   #[inline]
@@ -121,7 +122,7 @@ pub trait StripleIf : StripleFieldsIf {
     Ok(match self.get_tosig() {
       Ok((v, oc)) => {
         let mut cv = Cursor::new(v);
-        from.get_id() == self.get_from() && match oc {
+        *from.get_id() == *self.get_from() && match oc {
           Some (bc) => {
             match bc.get_readable() {
               Ok(mut r) => from.check_content(&mut cv.chain(r.trait_read()), self.get_sig())?,
@@ -155,7 +156,7 @@ pub trait GenStripleIf : StripleFieldsIf {
     Ok(match self.get_tosig() {
       Ok((v, oc)) => {
         let mut cv = Cursor::new(v);
-        from.get_id() == self.get_from() && match oc {
+        *from.get_id() == *self.get_from() && match oc {
           Some (bc) => {
             match bc.get_readable() {
               Ok(mut r) => from.check_content(&mut cv.chain(r.trait_read()), self.get_sig())?,
@@ -204,22 +205,57 @@ impl<S : StripleIf> GenStripleIf for S {
     <Self as StripleIf>::check_id(self,from)
   }
 }*/
+
+/// use to mix static lifetime and non static lifetime, allows more flexibility for composing
+/// striples
+pub enum ByteSlice<'a> {
+  Static(&'static [u8]),
+  Owned(&'a[u8]),
+}
+
+impl<'a> Deref for ByteSlice<'a> {
+
+  type Target = [u8];
+  fn deref(&self) -> &[u8] {
+    match *self {
+      ByteSlice::Static(ref s) => &s[..],
+      ByteSlice::Owned(ref s) => &s[..],
+    }
+  }
+}
+
+impl<'a> AsRef<[u8]> for ByteSlice<'a> {
+  fn as_ref(&self) -> &[u8] {
+    match *self {
+      ByteSlice::Static(ref s) => &s[..],
+      ByteSlice::Owned(ref s) => &s[..],
+    }
+  }
+}
+/*impl<'a> ByteSlice<'a> {
+  pub fn bytes(&self) -> &[u8] {
+    match *self {
+      ByteSlice::Static(ref s) => &s[..],
+      ByteSlice::Owned(ref s) => &s[..],
+    }
+  }
+}*/
 pub trait StripleFieldsIf : Debug {
 
   /// get key of striple defining algo scheme
-  fn get_algo_key(&self) -> &'static [u8];
+  fn get_algo_key(&self) -> ByteSlice;
 
   /// get content enc value
-  fn get_enc(&self) -> &[u8];
+  fn get_enc(&self) -> ByteSlice;
 
   /// get striple key value
   fn get_id(&self) -> &[u8];
 
   /// get striple key value
-  fn get_from(&self) -> &[u8];
+  fn get_from(&self) -> ByteSlice;
 
   /// get striple key value
-  fn get_about(&self) -> &[u8];
+  fn get_about(&self) -> ByteSlice;
 
   /// get content value
   fn get_content<'a>(&'a self) -> Option<&'a BCont<'a>>;
@@ -235,7 +271,7 @@ pub trait StripleFieldsIf : Debug {
 
   fn ser_tosig<'a> (&'a self, res : &mut Vec<u8>) -> Result<Option<&'a BCont<'a>>> {
     // never encode the same value for about and id
-    if self.get_id() != self.get_about() {
+    if *self.get_id() != *self.get_about() {
       res.append(&mut self.get_about().to_vec());
     }
     res.append(&mut self.get_key().to_vec());
@@ -277,7 +313,7 @@ pub trait StripleFieldsIf : Debug {
   /// If BCont is a Path, the path is written with a 2byte xtendsize before
   fn striple_ser_with_def<'a> (&'a self) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
     let mut res = Vec::new();
-    push_id(&mut res, self.get_algo_key());
+    push_id(&mut res, self.get_algo_key().deref());
     push_id(&mut res, &self.get_enc());
     ser_stripledesc(&self.striple_def(), &mut res)?;
     let r = self.striple_ser(res)?;
@@ -300,7 +336,7 @@ pub trait StripleFieldsIf : Debug {
         idsize : self.get_id().len(),
         fromsize : self.get_from().len(),
         sigsize : self.get_sig().len(),
-        aboutsize : if self.get_id() != self.get_about() {
+        aboutsize : if *self.get_id() != *self.get_about() {
           self.get_about().len()
         } else {
           0
@@ -944,8 +980,8 @@ impl<T : StripleKind> StripleIf for Striple<T> {
 
 impl<T : StripleKind> StripleFieldsIf for Striple<T> {
   #[inline]
-  fn get_algo_key(&self) -> &'static [u8]{
-    T::get_algo_key()
+  fn get_algo_key(&self) -> ByteSlice {
+    ByteSlice::Static(T::get_algo_key())
   }
 
  
@@ -956,17 +992,17 @@ impl<T : StripleKind> StripleFieldsIf for Striple<T> {
   #[inline]
   fn get_id(&self) -> &[u8]{&self.id}
   #[inline]
-  fn get_about(&self) -> &[u8] {
+  fn get_about(&self) -> ByteSlice {
     if self.about.len() > 0 {
-      &self.about
+      ByteSlice::Owned(&self.about)
     } else {
-      &self.id
+      ByteSlice::Owned(&self.id)
     }
   }
   #[inline]
-  fn get_from(&self) -> &[u8] {&self.from}
+  fn get_from(&self) -> ByteSlice {ByteSlice::Owned(&self.from)}
   #[inline]
-  fn get_enc(&self) -> &[u8] {&self.contentenc}
+  fn get_enc(&self) -> ByteSlice {ByteSlice::Owned(&self.contentenc)}
   #[inline]
   fn get_content<'a>(&'a self) -> Option<&'a BCont<'a>> {
     self.content.as_ref()
@@ -1000,8 +1036,8 @@ impl<'a,T : StripleKind> StripleIf for StripleRef<'a,T> {
 
 impl<'a,T : StripleKind> StripleFieldsIf for StripleRef<'a,T> {
   #[inline]
-  fn get_algo_key(&self) -> &'static [u8]{
-    T::get_algo_key()
+  fn get_algo_key(&self) -> ByteSlice {
+    ByteSlice::Static(T::get_algo_key())
   }
 
 
@@ -1012,17 +1048,17 @@ impl<'a,T : StripleKind> StripleFieldsIf for StripleRef<'a,T> {
   #[inline]
   fn get_id(&self) -> &[u8]{self.id}
   #[inline]
-  fn get_about(&self) -> &[u8] {
+  fn get_about(&self) -> ByteSlice {
     if self.about.len() > 0 {
-      self.about
+      ByteSlice::Owned(self.about)
     } else {
-      self.id
+      ByteSlice::Owned(self.id)
     }
   }
   #[inline]
-  fn get_from(&self) -> &[u8] {self.from}
+  fn get_from(&self) -> ByteSlice {ByteSlice::Owned(self.from)}
   #[inline]
-  fn get_enc(&self) -> &[u8] {self.contentenc}
+  fn get_enc(&self) -> ByteSlice {ByteSlice::Owned(self.contentenc)}
   #[inline]
   fn get_content<'b>(&'b self) -> Option<&'b BCont<'b>> {
     self.content.as_ref()
@@ -2118,10 +2154,10 @@ pub mod test {
     ).unwrap();
     let root = ownedroot.0;
     // check algo is same as K1 get_algo
-    assert_eq!(root.get_algo_key(), K1::get_algo_key());
+    assert_eq!(*root.get_algo_key(), *K1::get_algo_key());
     // check about and from are same as id
     assert_eq!(root.get_id(),&root.from[..]);
-    assert!(root.get_id() == root.get_about());
+    assert!(*root.get_id() == *root.get_about());
 
     // check signed by itself
     assert!(root.check(&root).unwrap());
@@ -2338,8 +2374,8 @@ impl<'a,  S : StripleIf> Display for StripleDisp<'a, S> {
   fn fmt(&self, ftr : &mut Formatter) -> FmtResult {
     ftr.debug_struct("")
     .field("id", &base64::encode_config(self.0.get_id(),BASE64CONF))
-    .field("from", &base64::encode_config(self.0.get_from(),BASE64CONF))
-    .field("about", &base64::encode_config(self.0.get_about(),BASE64CONF))
+    .field("from", &base64::encode_config(&self.0.get_from(),BASE64CONF))
+    .field("about", &base64::encode_config(&self.0.get_about(),BASE64CONF))
     .field("content_ids", &{
       let mut catids = "[".to_string();
       for id in self.0.get_content_ids().iter() {
@@ -2352,7 +2388,7 @@ impl<'a,  S : StripleIf> Display for StripleDisp<'a, S> {
     .field("content_string", &String::from_utf8(truncated_content(self.0.get_content()).to_vec()))
     .field("key", &base64::encode_config(self.0.get_key(),BASE64CONF))
     .field("sig", &base64::encode_config(self.0.get_sig(),BASE64CONF))
-    .field("kind ", &base64::encode_config(self.0.get_algo_key(),BASE64CONF))
+    .field("kind ", &base64::encode_config(&self.0.get_algo_key(),BASE64CONF))
     .finish()
 
   }

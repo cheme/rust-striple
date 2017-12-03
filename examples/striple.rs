@@ -280,7 +280,7 @@ fn run() {
      let ofrom = if args.flag_ix.len() > 1 {
        fromit.get(args.flag_ix[1] - 1).ok()
      } else {
-       fromit.find (|f|f.0.get_id() == fromid)
+       fromit.find (|f|*f.0.get_id() == *fromid)
      };
      match ofrom {
        Some(ref from) => {
