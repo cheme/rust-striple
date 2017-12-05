@@ -26,7 +26,6 @@ use stripledata;
 use anystriple::PubSha512;
 
 
-
 #[cfg(test)]
 use striple::test::{test_striple_kind,chaining_test};
 

@@ -9,7 +9,10 @@ use serde::de::Error as SerdeError;
 use std::env::VarError;
 use std::fmt::{Display,Debug,Formatter};
 use std::fmt::Result as FmtResult;
-use std::marker::PhantomData;
+use std::marker::{
+  PhantomData,
+  Sync,
+};
 use num;
 use std::mem;
 use std::ptr::copy_nonoverlapping;
@@ -556,7 +559,7 @@ impl Read for Content {
 ///
 /// fn<T : StripleKind> as_striple (user : &User) -> Striple<T>{...}
 /// Sized to 0 (usage of phantomdata)
-pub trait StripleKind : Debug + Clone {
+pub trait StripleKind : Debug + Clone + Send + Sync + 'static {
   type D : IDDerivation;
   type S : SignatureScheme;
 

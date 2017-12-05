@@ -38,7 +38,6 @@ mod public;
 mod public;
 pub mod stripledata; 
 
-
 #[cfg(feature="opensslrsa")]
 mod rsa_openssl;
 
