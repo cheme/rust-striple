@@ -40,7 +40,15 @@ pub mod stripledata;
 
 #[cfg(feature="opensslrsa")]
 mod rsa_openssl;
+pub mod keyder {
+  #[cfg(feature="opensslrsa")]
+  pub use rsa_openssl::SHA512KD;
+  #[cfg(feature="cryptoecdsa")]
+  pub use ecdsa_crypto::RIPEMD160KD;
+  pub use striple::IdentityKD;
+  pub use striple::NoIDDer;
 
+}
 
 #[cfg(feature="cryptoecdsa")]
 mod ecdsa_crypto;
