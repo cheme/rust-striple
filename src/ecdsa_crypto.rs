@@ -25,12 +25,13 @@ use anystriple::PubRipemd;
 #[cfg(test)]
 use striple::test::{test_striple_kind,chaining_test};
 
-/// Key derivation using SHA-512
+/// Key derivation using ripemd160
 #[allow(dead_code)]
 pub struct RIPEMD160KD;
 
 /// key is same as signature (case where signature does not need to be serialize)
 impl IDDerivation for RIPEMD160KD {
+  const EXPECTED_SIZE : Option<usize> = Some(160/8);
   /// id
   #[inline]
   fn derive_id(sig : &[u8]) -> Result<Vec<u8>> {

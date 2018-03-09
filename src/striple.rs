@@ -571,8 +571,11 @@ pub trait StripleKind : Debug + Clone + Send + Sync + 'static {
 /// specifies the scheme is public
 pub trait PublicScheme : SignatureScheme{}
 
+
 /// build key from bytes (signature)
 pub trait IDDerivation {
+  // possible expected size if constant key der size
+  const EXPECTED_SIZE : Option<usize>;
   /// parameter is signature
   fn derive_id(sig : &[u8]) -> Result<Vec<u8>>;
   /// first parameter is signature, second is key
@@ -588,6 +591,7 @@ pub struct IdentityKD;
 /// warning this is prone to creating big key in heterogenous network (size of sig depends on
 /// parent striple).
 impl IDDerivation for IdentityKD {
+  const EXPECTED_SIZE : Option<usize> = None;
   /// id
   #[inline]
   fn derive_id(sig : &[u8]) -> Result<Vec<u8>> {
@@ -1764,6 +1768,7 @@ impl StripleKind for NoKind {
   }
 }
 impl IDDerivation for NoIDDer {
+  const EXPECTED_SIZE : Option<usize> = Some(0);
   fn derive_id(_ : &[u8]) -> Result<Vec<u8>> {
     Err(Error("NoDerivation".to_string(), ErrorKind::KindImplementationNotFound, None))
   }
@@ -1891,6 +1896,7 @@ pub mod test {
     }
   }
   impl IDDerivation for TestKeyDer1 {
+    const EXPECTED_SIZE : Option<usize> = None;
     fn derive_id(sig : &[u8]) -> Result<Vec<u8>> {
       // simply use signature as key
       Ok(sig.to_vec())

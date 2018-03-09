@@ -889,9 +889,9 @@ impl<SK : StripleKind, T : StripleIf, R : Read + Seek, B, C : StorageCypher> Ite
   type Item = (T,Option<Vec<u8>>);
 
   fn next(&mut self) -> Option<Self::Item> {
-    println!("start next");
+    //println!("start next");
     let res = read_striple::<_,SK,_,_,_>(&self.1, &mut self.0, &self.2);
-    println!("{:?}",res);
+    //println!("{:?}",res);
         
     res.unwrap_or(None)
   }

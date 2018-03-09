@@ -40,6 +40,7 @@ pub struct SHA512KD;
 
 /// key is same as signature (case where signature does not need to be serialize)
 impl IDDerivation for SHA512KD {
+  const EXPECTED_SIZE : Option<usize> = Some(512/8);
   /// id
   #[inline]
   fn derive_id(sig : &[u8]) -> Result<Vec<u8>> {
