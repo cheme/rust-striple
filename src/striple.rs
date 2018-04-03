@@ -1919,7 +1919,7 @@ pub mod test {
     fn new_keypair() -> Result<(Vec<u8>, Vec<u8>)> {
       // Dummy pri is same as pub
       let mut tmp = [0u8; 4];
-      rand::thread_rng().fill_bytes(&mut tmp);
+      rand::thread_rng().fill(&mut tmp[..]);
       let rand = tmp.to_vec();
       Ok((rand.clone(), rand))
     }
@@ -2312,7 +2312,7 @@ pub mod test {
   pub fn random_bytes(size : usize) -> Vec<u8> {
     let mut rng = rand::thread_rng();
     let mut bytes = vec![0; size];
-    rng.fill_bytes(&mut bytes);
+    rng.fill(&mut bytes[..]);
     bytes
   }
 

@@ -42,6 +42,7 @@ use self::openssl::hash::MessageDigest;
 use self::openssl::symm::{Cipher,Crypter,Mode};
 
 use self::rand::Rng;
+use self::rand::RngCore;
 use self::rand::os::OsRng;
 use std::fmt::Result as FmtResult;
 use std::fmt::{Formatter};
@@ -199,9 +200,10 @@ impl Pbkdf2 {
     let ivl = cipher.iv_len().unwrap_or(0);
  
     // gen salt
-    let mut rng = OsRng::new()?;
+    let mut rng = OsRng::new().map_err(|e|StripleError(e.to_string(),StripleErrorKind::IOError,None))?;
     let mut s = vec![0; ivl];
-    rng.fill_bytes(&mut s);
+    rng.try_fill_bytes(&mut s[..]).map_err(|e|StripleError(e.to_string(),StripleErrorKind::IOError,None))?;;
+    //rng.fill(&mut s[..]);
     Ok(s)
   }
   pub fn new (pass : String, iter : usize, salt : Vec<u8>) -> Result<Pbkdf2> {
@@ -244,11 +246,11 @@ impl StorageCypher for Pbkdf2 {
   // TODO very fishy (one cripter per content)
   fn encrypt (&self, pk : &[u8]) -> Result<Vec<u8>> {
     // gen salt
-    let mut rng = OsRng::new()?;
+    let mut rng = OsRng::new().map_err(|e|StripleError(e.to_string(),StripleErrorKind::IOError,None))?;
     let buflen = self.cipher.block_size();
     let mut buff = vec![0; buflen + self.cipher.block_size()];
  
-    rng.fill_bytes(&mut buff[..self.ivlength]);
+    rng.try_fill_bytes(&mut buff[..self.ivlength]).map_err(|e|StripleError(e.to_string(),StripleErrorKind::IOError,None))?;;
 //    self.crypter.init(Mode::Encrypt,&self.key[..],iv.clone());
     let mut crypter = Crypter::new(
       self.cipher,

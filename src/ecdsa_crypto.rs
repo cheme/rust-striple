@@ -157,7 +157,7 @@ fn hash_buf_crypto(r : &mut Read, digest : &mut Digest) -> Result<Vec<u8>> {
 fn sec_random_bytes(size : usize) -> Vec<u8> {
    let mut rng = OsRng::new().unwrap();
    let mut bytes = vec![0; size];
-   rng.fill_bytes(&mut bytes[..]);
+   rng.fill(&mut bytes[..]);
    bytes
 }
 
@@ -165,7 +165,7 @@ fn sec_random_bytes(size : usize) -> Vec<u8> {
 fn random_bytes(size : usize) -> Vec<u8> {
    let mut rng = rand::thread_rng();
    let mut bytes = vec![0; size];
-   rng.fill_bytes(&mut bytes[..]);
+   rng.fill(&mut bytes[..]);
    bytes
 }
 

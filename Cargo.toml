@@ -48,7 +48,7 @@ path = "examples/striple.rs"
 log = "~0.4.1"
 lazy_static = "~1.0.0"
 num = "~0.1.42"
-rand = "~0.4" #TODO 0.5
+rand = "0.5.0-pre.0"
 
 [dependencies.serde]
 version = "~1.0.37"
