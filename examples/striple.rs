@@ -93,7 +93,7 @@ Options:
 fn main() {
 
   // activate env_logger
-  env_logger::init().unwrap();
+  env_logger::init();
   
   run()
 }

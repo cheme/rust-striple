@@ -166,7 +166,7 @@ fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : MessageDigest, blen : us
       digest.write(buff)?;
     };
   };
-  Ok(digest.finish2()?.to_vec())
+  Ok(digest.finish()?.to_vec())
 }
 
 

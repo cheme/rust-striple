@@ -11,7 +11,7 @@ use striple::Error;
 use striple::Result;
 use striple::ErrorKind;
 use anystriple::Rsa2048Sha512;
-use self::openssl::hash::{Hasher,MessageDigest,hash2};
+use self::openssl::hash::{Hasher,MessageDigest,hash};
 use self::openssl::pkey::{PKey};
 use self::openssl::rsa::{Rsa};
 use self::openssl::error::ErrorStack;
@@ -47,7 +47,7 @@ impl IDDerivation for SHA512KD {
     Ok(if sig.len() < 1 {
       Vec::new()
     } else {
-      hash2(MessageDigest::sha512(), sig)?.to_vec() // TODO use result
+      hash(MessageDigest::sha512(), sig)?.to_vec() // TODO use result
     })
   }
 }
@@ -85,7 +85,7 @@ impl SignatureScheme for Rsa2048 {
     let pk = PKey::from_rsa(rsa)?;
     let mut s = Signer::new(MessageDigest::sha512(),&pk)?;
     s.write_all(&tosig)?;
-    Ok(s.finish()?)
+    Ok(s.sign_to_vec()?)
   }
 
   /// first parameter is public key, second is content and third is signature
@@ -113,7 +113,7 @@ impl SignatureScheme for Rsa2048 {
 
     let tosig = digest.finish()?;
     ver.write_all(&tosig)?;
-    let r = ver.finish(sign)?;
+    let r = ver.verify(sign)?;
     Ok(r)
     //res.map(|_| pkey.verify_with_hash(&digest.finish(), sign, MessageDigest::sha512())).unwrap_or(false)
   }
