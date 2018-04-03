@@ -5,6 +5,7 @@
 use base64::STANDARD as BASE64CONF;
 use std::error::Error as ErrorTrait;
 use std::io::Error as IOError;
+#[cfg(feature="serialize")]
 use serde::de::Error as SerdeError;
 use std::env::VarError;
 use std::fmt::{Display,Debug,Formatter};
@@ -13,7 +14,6 @@ use std::marker::{
   PhantomData,
   Sync,
 };
-use num;
 use std::mem;
 use std::ptr::copy_nonoverlapping;
 use std::io::{Read};
@@ -298,7 +298,7 @@ pub trait StripleFieldsIf : Debug {
       },
     };
     con.map(|c|res.append(&mut c.to_vec()));
-    Ok((ocon))
+    Ok(ocon)
   }
 
   #[inline]
@@ -1510,7 +1510,8 @@ pub fn xtendsize(l : usize, nbbyte : usize) -> Vec<u8> {
   let mut res = Vec::new();
   let mut nbbytes = nbbyte;
   // TODO precalc iteration in table
-  let maxval = (num::pow(2, nbbyte * 8) - 1) / 2;
+  let p : usize = usize::pow(2 as usize, nbbyte as u32 * 8);
+  let maxval : usize = (p - 1) / 2;
   // no need for recursive as nbbyte is limited by usize and just a few byte
   if l > maxval {
     nbbytes = calcnbbyte(l);
@@ -1523,7 +1524,7 @@ pub fn xtendsize(l : usize, nbbyte : usize) -> Vec<u8> {
   // TODO find a way to parameterized those 4 bytes (max_value can't be use in static init)
   unsafe {
       debug!("DEBUG {:?} !!!",l);
-    let v : [u8;8] = if cfg!(target_endian = "little") {
+    let v : [u8;USIZE_LEN] = if cfg!(target_endian = "little") {
       mem::transmute(usize::from_be(l))
     }else{
       mem::transmute(l)
@@ -1538,7 +1539,10 @@ pub fn xtendsize(l : usize, nbbyte : usize) -> Vec<u8> {
 
   res
 }
-
+#[cfg(target_pointer_width = "64")]
+const USIZE_LEN : usize = 8;
+#[cfg(target_pointer_width = "32")]
+const USIZE_LEN : usize = 4;
 /// tool function to get a size as standard rust usize from xtensize in 
 /// bytes at a certain position for a designed size.
 /// The function update index value
@@ -1559,11 +1563,11 @@ pub fn xtendsizedec(bytes : &[u8], ix : &mut usize, nbbyte : usize) -> usize {
     idx += 1;
   }
   let res = unsafe {
-  let mut v : [u8;8] = mem::transmute(0usize);
+  let mut v : [u8;USIZE_LEN] = mem::transmute(0usize);
   debug!("DEBUG_bef {:?}, {:?} !!!",v, nbbytes);
   if idx + nbbytes <= bytes.len() {
     let b : &[u8] = &bytes[idx .. idx + nbbytes];
-    copy_nonoverlapping(b.as_ptr(),v[8-nbbytes..].as_mut_ptr(),nbbytes);
+    copy_nonoverlapping(b.as_ptr(),v[USIZE_LEN-nbbytes..].as_mut_ptr(),nbbytes);
     debug!("DEBUG_aft {:?} !!!",v);
     if cfg!(target_endian = "little") {
       usize::from_be(mem::transmute(v))
@@ -1605,10 +1609,10 @@ pub fn xtendsizeread<R : Read>(r : &mut R, nbbyte : usize) -> IOResult<usize> {
     nbbytes =  nbbytes + addbytes;
   }
   Ok(unsafe {
-  let mut v : [u8;8] = mem::transmute(0usize);
+  let mut v : [u8;USIZE_LEN] = mem::transmute(0usize);
   debug!("DEBUG_bef {:?}, {:?} !!!",v, nbbytes);
-  if nbbytes <= 8 {
-    copy_nonoverlapping(buf[adj_ix..].as_ptr(),v[8-nbbytes..].as_mut_ptr(),nbbytes);
+  if nbbytes <= USIZE_LEN {
+    copy_nonoverlapping(buf[adj_ix..].as_ptr(),v[USIZE_LEN-nbbytes..].as_mut_ptr(),nbbytes);
     debug!("DEBUG_aft {:?} !!!",v);
     if cfg!(target_endian = "little") {
       usize::from_be(mem::transmute(v))
@@ -1636,10 +1640,12 @@ pub fn xtendsizeread_foralloc<R : Read>(r : &mut R, nbbyte : usize) -> StdResult
 
 // get nbbyte for a value
 // TODO precalc iteration in table
+// TODO test for i = uss
 fn calcnbbyte(val : usize) -> usize {
   let mut res = 0;
-  for i in 0 .. 8 {
-    if val < (num::pow(2,i*8) - 1)/2 {
+  let uss = USIZE_LEN;
+  for i in 0 .. uss {
+    if val < (usize::pow(2,(i*8) as u32) - 1)/2 {
       res = i;
       break;
     }

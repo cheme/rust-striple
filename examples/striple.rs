@@ -18,7 +18,6 @@
 extern crate docopt;
 
 extern crate striple;
-extern crate num;
 #[cfg(feature="serialize")]
 extern crate base64;
 extern crate env_logger;
@@ -53,7 +52,6 @@ use striple::storage::{Pbkdf2};
 use std::result::Result as StdResult;
 use std::io::{stdin,BufRead};
 use std::io::Result as IOResult;
-use num::traits::ToPrimitive;
 use striple::storage::{write_striple_file,NoCypher,RemoveKey,init_any_cipher_stdin,init_noread_key,init_any_cypher_with_pass};
 
 
@@ -247,11 +245,11 @@ fn run() {
     println!("dtd");
       it.0.seek(SeekFrom::Start(pos)).unwrap();
       let r = it.get_entryposlength(ix).unwrap();
-      buff_copy(&mut it.0, &mut out, (r.0 - pos).to_usize().unwrap()).unwrap();
-      pos = r.0 + r.1.to_u64().unwrap();
+      buff_copy(&mut it.0, &mut out, (r.0 - pos) as usize).unwrap();
+      pos = r.0 + (r.1 as u64);
     });
     it.0.seek(SeekFrom::Start(pos)).unwrap();
-    buff_copy(&mut it.0, &mut out, (endpos - pos).to_usize().unwrap()).unwrap();
+    buff_copy(&mut it.0, &mut out, (endpos - pos) as usize).unwrap();
 
     // unsafe
     fs::rename(&tmppath,&args.flag_in).unwrap();
@@ -535,14 +533,14 @@ where B :  Fn(&[u8], StripleRef<NoKind>) -> StdResult<AnyStriple, StripleError>
     if args.flag_ox > 0 {
       let mut out = &mut File::create(args.flag_out.clone() + "__").unwrap();
       let from = &mut ot.0;
-      let usplit = splitpos.to_usize().unwrap();
+      let usplit = splitpos as usize;
       let finallen = from.metadata().unwrap().len();
       from.seek(SeekFrom::Start(0)).unwrap();
       buff_copy(from, out, usplit).unwrap();
       from.seek(SeekFrom::Start(initiallen)).unwrap();
-      buff_copy(from, out, (finallen - initiallen).to_usize().unwrap()).unwrap();
+      buff_copy(from, out, (finallen - initiallen) as usize).unwrap();
       from.seek(SeekFrom::Start(splitpos)).unwrap();
-      buff_copy(from, out, (initiallen - splitpos).to_usize().unwrap()).unwrap();
+      buff_copy(from, out, (initiallen - splitpos) as usize).unwrap();
       fs::rename(args.flag_out.clone() + "__",args.flag_out.clone()).unwrap();
     }; 
   } else {
@@ -583,14 +581,14 @@ fn copy_vec_oriter (args : &Args, contents : Vec<(AnyStriple,Option<Vec<u8>>)>, 
       if args.flag_ox > 0 {
         let mut out = &mut File::create(args.flag_out.clone() + "__").unwrap();
         let from = &mut ot.0;
-        let usplit = splitpos.to_usize().unwrap();
+        let usplit = splitpos as usize;
         let finallen = from.metadata().unwrap().len();
         from.seek(SeekFrom::Start(0)).unwrap();
         buff_copy(from, out, usplit).unwrap();
         from.seek(SeekFrom::Start(initiallen)).unwrap();
-        buff_copy(from, out, (finallen - initiallen).to_usize().unwrap()).unwrap();
+        buff_copy(from, out, (finallen - initiallen) as usize).unwrap();
         from.seek(SeekFrom::Start(splitpos)).unwrap();
-        buff_copy(from, out, (initiallen - splitpos).to_usize().unwrap()).unwrap();
+        buff_copy(from, out, (initiallen - splitpos) as usize).unwrap();
         fs::rename(args.flag_out.clone() + "__",args.flag_out.clone()).unwrap();
       }; 
     } else {

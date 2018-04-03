@@ -32,7 +32,6 @@ use striple::{
   from_option,
 };
 use std::io::Result as IOResult;
-use num::traits::ToPrimitive;
 
 #[cfg(feature="opensslpbkdf2")]
 use self::openssl::pkcs5::pbkdf2_hmac;

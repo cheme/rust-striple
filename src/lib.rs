@@ -15,7 +15,6 @@
 
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
-extern crate num;
 
 #[cfg(feature="serialize")]
 extern crate serde;
