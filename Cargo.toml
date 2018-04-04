@@ -31,6 +31,10 @@ any_base = []
 any_base_no_panic = []
 any_base_no_check = []
 
+[[bin]]
+name = "wasm-striple"
+path = "src/wasm.rs"
+
 [[example]]
 name='genbasestriples'
 path = "examples/generate_base.rs"
@@ -42,6 +46,9 @@ path = "examples/load_base.rs"
 [[example]]
 name='striple'
 path = "examples/striple.rs"
+
+[target.wasm32-unknown-unknown.dependencies]
+stdweb = "~0.4.2"
 
 
 [dependencies]

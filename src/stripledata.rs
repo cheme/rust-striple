@@ -9,6 +9,18 @@
 //! loading and therefore additional anytype scheme in external libraries!!!
 //!
 
+#[cfg(target_arch = "wasm32")]
+use std::io::Cursor;
+#[cfg(target_arch = "wasm32")]
+use std::mem::replace;
+#[cfg(target_arch = "wasm32")]
+use std::borrow::{
+  Borrow,
+  BorrowMut,
+};
+#[cfg(target_arch = "wasm32")]
+use std::cell::RefCell;
+
 use striple::Striple;
 use striple::{
   StripleFieldsIf,
@@ -24,12 +36,15 @@ use striple::{UnsafeOwnedStripleDisp};
 
 use std::fs::File;
 use storage::{FileStripleIterator,init_noread_key};
+#[cfg(not(target_arch = "wasm32"))]
 use std::env;
 use std::result::Result as StdResult;
 use striple::{
   Result,
   from_option,
   from_error,
+  Error,
+  ErrorKind,
 };
 #[cfg(feature="serialize")]
 use std::fmt::Result as FmtResult;
@@ -136,6 +151,7 @@ lazy_static!{
 pub static ref KINDIDS : Option<KindStriplesIDs> = init_kind_striple_ids().ok();
 }
 
+
 pub static PUBRIPEMKEY : &'static [u8] = &[73, 90, 215, 66, 44, 149, 161, 92, 107, 78, 148, 106, 215, 87, 129, 116, 62, 244, 33, 236, 84, 165, 176, 116, 86, 238, 126, 181, 94, 238, 82, 100, 110, 190, 109, 151, 252, 33, 98, 195, 27, 70, 152, 140, 215, 64, 117, 233, 157, 106, 181, 231, 226, 0, 34, 102, 120, 171, 235, 157, 121, 114, 207, 98];
 pub static PUBSHA512KEY : &'static [u8] = &[47, 72, 77, 220, 196, 219, 0, 90, 244, 218, 2, 142, 183, 206, 183, 196, 110, 227, 15, 151, 239, 9, 184, 102, 197, 90, 77, 34, 70, 188, 103, 215, 184, 203, 19, 34, 166, 179, 219, 105, 144, 15, 198, 9, 29, 197, 121, 127, 21, 13, 192, 134, 145, 222, 219, 31, 215, 40, 143, 114, 239, 39, 200, 16];
 pub static PUBSHA256KEY : &'static [u8] = &[59, 240, 107, 33, 144, 162, 215, 253, 232, 129, 27, 205, 90, 155, 111, 24, 6, 28, 214, 191, 45, 246, 234, 193, 62, 27, 122, 24, 206, 2, 68, 75, 105, 6, 128, 160, 66, 106, 169, 42, 58, 248, 51, 193, 200, 207, 162, 112, 106, 167, 56, 144, 111, 62, 198, 100, 105, 139, 11, 241, 187, 162, 18, 78];
@@ -151,15 +167,36 @@ pub fn init_kind_striple<SK : StripleKind> () -> Option<KindStriples<SK>> {
   None
 }
 
+// TODO striple should be refactor to maintain a reference to a striple ring initiated with bytes
+// in a non static way (best for wasm)
+#[cfg(target_arch = "wasm32")]
+const BASE_BUF: &'static [u8] = include_bytes!("../static/base.data");
+
+
+#[cfg(target_arch = "wasm32")]
+fn missing() -> Result<Vec<u8>> {
+  Err(Error("".to_string(),ErrorKind::MissingFile,None))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn get_base_read() -> Result<File> {
+  let path = from_error(env::var("STRIPLE_BASE"))?;
+  Ok(from_error(File::open(path))?)
+}
+#[cfg(target_arch = "wasm32")]
+pub fn get_base_read() -> Result<Cursor<Vec<u8>>> {
+  Ok(Cursor::new(
+    BASE_BUF.to_vec()
+  ))
+}
 
 /// init base striple from file in env var
 pub fn init_kind_striple_ids () -> Result<KindStriplesIDs> {
-
-  let path = from_error(env::var("STRIPLE_BASE"))?;
-  let datafile = from_error(File::open(path))?;
+  let datafile = get_base_read()?;
   // get striple without key and without Kind (as we define it)
   let rit : StdResult<FileStripleIterator<NoKind,Striple<NoKind>,_,_,_>,_> = FileStripleIterator::init(datafile, ref_builder_id_copy , &init_noread_key, ());
   let mut it = rit?;
+ 
   for _ in 0..6 {
     it.skip_striple()?;
   };

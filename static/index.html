@@ -1,0 +1,25 @@
+<html>
+    <head>
+            <script src="wasm-striple.js"></script>
+        <script>
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", 'base.data');
+                xhr.responseType = "arraybuffer";
+
+                xhr.onload = function () {
+                    if (this.status === 200) {
+                        Rust.wasm_striple.then(function(inst_mod) {
+                          // just for test
+                          window.striples = inst_mod;
+                          inst_mod.test(new Uint8Array(xhr.response));
+                        });
+                        window.base_striple = xhr.response;
+                    }
+                };
+                xhr.send();
+        </script>
+    </head>
+    <body>
+        Hello world !
+    </body>
+</html>

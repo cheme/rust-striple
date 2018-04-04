@@ -896,7 +896,6 @@ impl<T : StripleKind> InstantiableStripleImpl for Striple<T> {
     self.id = id;
   }
 }
-
 impl<T : StripleKind> Striple<T> {
 
   /// first step is creation of the key pair for this striple.

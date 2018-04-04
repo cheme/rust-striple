@@ -4,6 +4,7 @@
 //! overriden in applications.
 //!
 use std::env;
+use std::io::Cursor;
 use std::fs::File;
 use stripledata;
 use storage::{
@@ -39,6 +40,7 @@ use striple::{
 use striple::NoKind;
 use striple::Result;
 use std::result::Result as StdResult;
+
 
 
 #[cfg(feature="opensslrsa")]
@@ -548,3 +550,11 @@ impl AnyStriple {
     }
   }
 }
+// alias for issue with wasm modul -> ld issue when using wasm
+#[inline(never)]
+pub fn init_wasm_vec (mut file : Cursor<Vec<u8>>)  -> Vec<(AnyStriple,Option<Vec<u8>>)> {
+  let rit : StdResult<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_> = FileStripleIterator::init(file, copy_builder_any, &init_any_cipher_stdin, ()); 
+  let striples : Vec<(AnyStriple,Option<Vec<u8>>)> = rit.unwrap().collect();
+  striples
+}
+
