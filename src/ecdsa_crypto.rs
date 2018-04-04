@@ -5,6 +5,9 @@
 extern crate rand42_proxy as rand42;
 extern crate rand;
 extern crate sha2;
+
+// TODO use of function from this crates break wasm compilation
+// warning, only visible if linkage is called from main
 extern crate ed25519_dalek;
 extern crate ripemd160;
 use striple::SignatureScheme;
