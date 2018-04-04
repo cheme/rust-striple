@@ -1,4 +1,4 @@
-
+/*
 
 extern crate striple;
 /*#[cfg(target_arch = "wasm32")]
@@ -21,8 +21,8 @@ pub extern "C" fn test3() {
   // just this line
   StripleBug::dd ( );
 }
+*/
 
-/* 
 
 #![feature(proc_macro)]
 
@@ -51,6 +51,7 @@ use self::striple::striple::{
   StripleRef,
   Error,
 };
+use std::io::Cursor;
 /*#[cfg(target_arch = "wasm32")]
 use self::striple::stripledata::{
   wasm_set_base, 
@@ -145,4 +146,4 @@ fn test(fp : TypedArray<u8>) {
 */
   console!(log,"test end");
 }
-*/
+
