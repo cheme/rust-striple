@@ -47,7 +47,10 @@ path = "examples/striple.rs"
 [dependencies]
 log = "~0.4.1"
 lazy_static = "~1.0.0"
-rand = "0.5.0-pre.0"
+
+[dependencies.rand]
+version = "0.5.0-pre.0"
+features = ["stdweb"]
 
 [dependencies.rand42_proxy]
 version = "0.1.0"

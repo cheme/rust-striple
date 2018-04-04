@@ -24,10 +24,12 @@ use self::ed25519_dalek::{
   DecodingError,
 };
 use stripledata;
-use self::rand::Rng;
+use self::rand::{
+  Rng,
+  Error as RandError,
+};
 use self::rand::os::OsRng;
 use self::rand42::Rng as Rng42;
-use self::rand42::os::OsRng as OsRng42;
 use std::io::Read;
 use std::io::Cursor;
 use anystriple::EcdsaRipemd160;
@@ -61,6 +63,12 @@ impl From<DecodingError> for Error {
     Error(format!("Ed25519 : {}",de),ErrorKind::DecodingError,None)
   }
 }
+impl From<RandError> for Error {
+  fn from(de : RandError) -> Self {
+    Error(format!("Rand : {}",de),ErrorKind::IOError,None)
+  }
+}
+
 #[derive(Debug,Clone)]
 pub struct Ecdsa;
 
@@ -92,10 +100,28 @@ impl SignatureScheme for Ecdsa {
   /// create keypair (first is public, second is private)
   fn new_keypair() -> Result<(Vec<u8>, Vec<u8>)> {
    // let seed = sec_random_bytes(32);
-    let mut cspring: OsRng42 = OsRng42::new().unwrap();
+    let mut cspring: OsRngVAdapt = OsRngVAdapt(OsRng::new()?);
     let keypair: Keypair = Keypair::generate::<Sha512>(&mut cspring);
     //let (pr, pu) = ed25519::keypair(&seed);
     Ok((keypair.public.to_bytes().to_vec(), keypair.to_bytes().to_vec()))
+  }
+}
+// adapt 5.0 rng adapter to old 4.2 trait
+// In future, remove it with 4.2 crates
+struct OsRngVAdapt(pub OsRng);
+
+impl Rng42 for OsRngVAdapt {
+  #[inline]
+  fn next_u32(&mut self) -> u32 {
+    self.0.gen()
+  }
+  #[inline]
+  fn next_u64(&mut self) -> u64 {
+    self.0.gen()
+  }
+  #[inline]
+  fn fill_bytes(&mut self, v: &mut [u8]) { 
+    self.0.fill(v)
   }
 }
 

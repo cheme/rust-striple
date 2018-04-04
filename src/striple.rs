@@ -1656,7 +1656,8 @@ fn calcnbbyte(val : usize) -> usize {
 
 #[test]
 fn test_xtendsize () {
-  assert_eq!(xtendsize(0,0),vec![]);
+  let evec : Vec<u8> = Vec::new();
+  assert_eq!(xtendsize(0,0),evec);
   //assert_eq!(xtendsize(127,1),vec![127]);
   assert_eq!(xtendsize(0,1),vec![0x0000]);
   assert_eq!(xtendsize(127,1),vec![0x7f]);
@@ -2139,10 +2140,11 @@ pub mod test {
     // and asym
     assert!(kp1.0 != kp1.1);
 
+    let evec : Vec<u8> = Vec::new();
     // signature never empty
-    assert!(S::sign_content(&kp1.1[..], &mut cont_1).unwrap() != &vec!()[..]);
+    assert!(S::sign_content(&kp1.1[..], &mut cont_1).unwrap() != &evec[..]);
     cont_1.seek(SeekFrom::Start(0)).unwrap();
-    assert!(S::sign_content(&kp2.1[..], &mut cont_1).unwrap() != &vec!()[..]);
+    assert!(S::sign_content(&kp2.1[..], &mut cont_1).unwrap() != &evec[..]);
     cont_1.seek(SeekFrom::Start(0)).unwrap();
 
     // signing must have salt : no since different public key in content
