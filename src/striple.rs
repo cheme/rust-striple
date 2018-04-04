@@ -543,7 +543,7 @@ impl<'a> BCont<'a> {
     match self {
       &BCont::NotOwnedBytes(ref b) => b.len(),
       &BCont::OwnedBytes(ref b) => b.len(),
-      &BCont::LocalPath(ref p,s) => s,
+      &BCont::LocalPath(ref _p,s) => s,
     }
   }
 }
@@ -612,6 +612,7 @@ impl IDDerivation for IdentityKD {
 /// same content will have the same key), or the key derivation key use in combination should be
 /// random (for example in public).
 /// - key verification must be invalid if signature change
+/// TODO in future I may switch to not using fat pointers on read
 pub trait SignatureScheme {
 
   /// first parameter is private key, second parameter is content
@@ -936,7 +937,7 @@ impl<T : StripleKind> Striple<T> {
     content : Option<BCont<'static>>,
   ) -> Result<(Striple<T>,Vec<u8>)> {
     let (pubkey,prikey) = T::S::new_keypair()?;
-    let mut res = Striple {
+    let res = Striple {
         contentenc : contentenc,
         id : vec!(),
         from : vec!(),

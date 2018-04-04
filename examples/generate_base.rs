@@ -359,7 +359,7 @@ pub fn write_striple_with_enc
 //  write_striple(cypher,striple,dest)
 
   let tmpvec : Vec<u8> = Vec::new();
-  let mut buf = &mut Cursor::new(tmpvec);
+  let buf = &mut Cursor::new(tmpvec);
 
   try!(write_striple(cypher,striple,pkey,&FileMode::NoFile,buf));
 

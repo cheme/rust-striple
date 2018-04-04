@@ -1,0 +1,7 @@
+[package]
+name = "rand42_proxy"
+version = "0.1.0"
+authors = ["cheme <emericchevalier.pro@gmail.com>"]
+
+[dependencies]
+rand = "0.4.2"

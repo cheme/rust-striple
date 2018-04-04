@@ -195,7 +195,7 @@ fn read_pbkdf2_header<R : Read> (file : &mut R) -> Result<(usize,usize,Vec<u8>)>
 impl Pbkdf2 {
   pub fn gen_salt() -> Result<Vec<u8>> {
     let cipher = Cipher::aes_256_cbc();
-    let kl = cipher.key_len();
+    let _kl = cipher.key_len();
     let ivl = cipher.iv_len().unwrap_or(0);
  
     // gen salt
@@ -818,7 +818,7 @@ pub fn skip_striple (&mut self) -> IOResult<()> {
     let posstart = try!(self.0.seek(SeekFrom::Current(0)));
     let poslengt = try!(self.get_entryposlength(ix));
 
-    let mut from = &mut self.0;
+    let from = &mut self.0;
     let mut res = vec![0; poslengt.1];
     try!(from.seek(SeekFrom::Start(poslengt.0)));
     try!(from.read(&mut res));

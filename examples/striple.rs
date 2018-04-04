@@ -458,14 +458,14 @@ fn show_it(toshow : (AnyStriple,Option<Vec<u8>>), ix : usize) {
 
 // find a lib to replace (see evo of io)...
 fn buff_copy<R : Read, W : Write> (from : &mut R, to : &mut W, size : usize) -> IOResult<()> {
-  let mut buff = &mut [0;4096];
+  let buff = &mut [0;4096];
   let nbit = size / 4096;
   let rembit = size - nbit * 4096;
   for _ in 0 .. nbit {
     try!(from.read(buff));
     try!(to.write(buff));
   };
-  let mut lastbuff = &mut buff[0..rembit];
+  let lastbuff = &mut buff[0..rembit];
   try!(from.read(lastbuff));
   try!(to.write(lastbuff));
   Ok(())
@@ -531,7 +531,7 @@ where B :  Fn(&[u8], StripleRef<NoKind>) -> StdResult<AnyStriple, StripleError>
       write_striple(&ot.1,&mos.0,mos.1.as_ref().map(|pk|&pk[..]), &fm, &mut ot.0).unwrap();
     };
     if args.flag_ox > 0 {
-      let mut out = &mut File::create(args.flag_out.clone() + "__").unwrap();
+      let out = &mut File::create(args.flag_out.clone() + "__").unwrap();
       let from = &mut ot.0;
       let usplit = splitpos as usize;
       let finallen = from.metadata().unwrap().len();
@@ -579,7 +579,7 @@ fn copy_vec_oriter (args : &Args, contents : Vec<(AnyStriple,Option<Vec<u8>>)>, 
         write_striple(&ot.1,&mos.0,mos.1.as_ref().map(|pk|&pk[..]),&fm,&mut ot.0).unwrap();
       };
       if args.flag_ox > 0 {
-        let mut out = &mut File::create(args.flag_out.clone() + "__").unwrap();
+        let out = &mut File::create(args.flag_out.clone() + "__").unwrap();
         let from = &mut ot.0;
         let usplit = splitpos as usize;
         let finallen = from.metadata().unwrap().len();

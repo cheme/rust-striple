@@ -30,10 +30,7 @@ extern crate libc;
 pub mod striple;
 pub mod anystriple;
 pub mod storage;
-#[cfg(feature="public_crypto")]
-mod public;
-#[cfg(feature="public_openssl")]
-#[cfg(not(feature="public_crypto"))]
+#[cfg(any(feature="public_crypto",feature="public_openssl"))]
 mod public;
 pub mod stripledata; 
 

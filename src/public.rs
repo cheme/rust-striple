@@ -19,6 +19,7 @@ pub trait CHash : Debug + Clone {
   fn len () -> usize;
 }
 
+// TODO ref to rng gen type (to allow wasm to use ext rand (js) gen
 #[derive(Debug,Clone)]
 pub struct PubSign<H : CHash>(PhantomData<H>);
 
@@ -49,11 +50,11 @@ impl<H : CHash> PublicScheme for PubSign<H> {}
 
 #[cfg(feature="public_crypto")]
 pub mod public_crypto {
-  extern crate crypto;
+  extern crate ripemd160;
   use striple::{StripleKind,IdentityKD,Result};
   use stripledata;
-  use self::crypto::digest::Digest;
-  use self::crypto::ripemd160::Ripemd160;
+  use self::ripemd160::Digest;
+  use self::ripemd160::Ripemd160;
   use super::{PubSign,CHash};
   use std::io::Read;
   use std::io::Cursor;
@@ -82,42 +83,18 @@ pub mod public_crypto {
 
   impl CHash for Ripemd {
 
-  fn hash(buff1 : &[u8], buff2 : &mut Read) -> Result<Vec<u8>> {
-    let digest = Ripemd160::new();
-    hash_crypto(buff1, buff2, digest)
-  }
-  // TODO test rand buff2 and 1 hash compare to their cat with empty buff
-  fn len() -> usize {
-    160
-  }
+    fn hash(buff1 : &[u8], buff2 : &mut Read) -> Result<Vec<u8>> {
+      hash_crypto::<Ripemd160>(buff1, buff2)
+    }
+    fn len() -> usize {
+      160
+    }
   }
 
-  fn hash_crypto<H : Digest>(buff1 : &[u8], buff2 : &mut Read, mut digest : H) -> Result<Vec<u8>> {
+  fn hash_crypto<H : Digest>(buff1 : &[u8], buff2 : &mut Read) -> Result<Vec<u8>> {
     let mut r = Cursor::new(buff1).chain(buff2);
-
-    let bbytes = digest.block_size();
-//    let bbytes = (bsize+7)/8;
-    let ressize = digest.output_bits();
-    let outbytes = (ressize+7)/8;
-    debug!("{:?}:{:?}", bbytes,ressize);
- 
-    let mut vbuf = vec!(0;bbytes);
-    let buff = &mut vbuf[..];
-    loop {
-      let end = r.read(buff)?;
-      if end == 0 {
-        break
-      };
-      if end != bbytes {
-       digest.input(&buff[0 .. end]);
-      } else {
-        digest.input(buff);
-      };
-    };
-    //  digest.input(&buf[(nbiter -1)*bbytes .. ]);
-    let mut rvec : Vec<u8> = vec![0; outbytes];
-    digest.result(&mut rvec);
-    Ok(rvec)
+    let rvec = <H as Digest>::digest_reader(&mut r)?;
+    Ok(rvec.to_vec())
   }
  
   #[test]

@@ -23,8 +23,8 @@ default = ["any_base","public_crypto","serialize","public_openssl","cryptoecdsa"
 serialize = ["serde_derive","serde","base64"]
 opensslrsa = ["openssl"]
 opensslpbkdf2 = ["openssl"]
-cryptoecdsa = ["rust-crypto"]
-public_crypto = ["uuid","rust-crypto"]
+cryptoecdsa = ["ed25519-dalek","sha2","ripemd160","digest","rand42_proxy"]
+public_crypto = ["uuid","ripemd160","digest"]
 public_openssl = ["uuid","openssl"]
 for_c = ["libc"]
 any_base = []
@@ -49,6 +49,11 @@ log = "~0.4.1"
 lazy_static = "~1.0.0"
 rand = "0.5.0-pre.0"
 
+[dependencies.rand42_proxy]
+version = "0.1.0"
+path = "./rand42_proxy"
+optional = true
+
 [dependencies.serde]
 version = "~1.0.37"
 optional = true
@@ -67,9 +72,23 @@ optional = true
 version = "~0.10.5"
 optional = true
 
-[dependencies.rust-crypto]
-version = "~0.2.36"
+[dependencies.sha2]
+version = "~0.7.0"
 optional = true
+
+[dependencies.ed25519-dalek]
+version = "~0.6.2"
+optional = true
+
+[dependencies.ripemd160]
+version = "~0.7.0"
+optional = true
+
+[dependencies.digest]
+version = "~0.7.2"
+features = ["std"]
+optional = true
+
 
 [dependencies.uuid]
 version = "~0.6.2"

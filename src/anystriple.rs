@@ -57,13 +57,9 @@ pub type StriplePSha512 = Striple<NoKind>;
 pub type StriplePSha256 = Striple<PubSha256>;
 #[cfg(not(feature="public_openssl"))]
 pub type StriplePSha256 = Striple<NoKind>;
-#[cfg(feature="public_openssl")]
+#[cfg(any(feature="public_openssl",feature="public_crypto"))]
 pub type StriplePRIP = Striple<PubRipemd>;
-#[cfg(not(feature="public_openssl"))]
-#[cfg(feature="public_crypto")]
-pub type StriplePRIP = Striple<PubRipemd>;
-#[cfg(not(feature="public_openssl"))]
-#[cfg(not(feature="public_crypto"))]
+#[cfg(not(any(feature="public_openssl",feature="public_crypto")))]
 pub type StriplePRIP = Striple<NoKind>;
 
 
@@ -236,8 +232,7 @@ impl StripleKind for EcdsaRipemd160 {
   }
 }
 
-#[cfg(not(feature="public_openssl"))]
-#[cfg(not(feature="public_crypto"))]
+#[cfg(not(any(feature="public_openssl",feature="public_crypto")))]
 impl StripleKind for PubRipemd {
     type D = NoIDDer;
     type S = NoSigCh;
