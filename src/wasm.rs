@@ -1,4 +1,29 @@
 
+
+extern crate striple;
+/*#[cfg(target_arch = "wasm32")]
+use self::striple::stripledata::{
+  wasm_set_base, 
+};*/
+
+use self::striple::{
+  StripleBug,
+};
+//use std::mem::transmute;
+
+
+fn main() {
+  // placeholder
+}
+
+#[no_mangle]
+pub extern "C" fn test3() {
+  // just this line
+  StripleBug::dd ( );
+}
+
+/* 
+
 #![feature(proc_macro)]
 
 extern crate striple;
@@ -14,7 +39,6 @@ use self::stdweb::web::{
   TypedArray,
   ArrayBuffer,
 };
-use std::io::Cursor;
 use self::striple::striple::{
   Striple,
   StripleIf,
@@ -121,4 +145,4 @@ fn test(fp : TypedArray<u8>) {
 */
   console!(log,"test end");
 }
-
+*/

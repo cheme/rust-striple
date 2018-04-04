@@ -25,10 +25,13 @@ extern crate base64;
 #[cfg(feature="for_c")]
 extern crate libc;
 
-pub struct StripleBug;
-
+pub struct StripleBug {
+}
 impl StripleBug {
-  pub fn dd (  ) {  }
+  pub fn dd (
+  ) -> () {
+    ()
+  }
 }
 
 
