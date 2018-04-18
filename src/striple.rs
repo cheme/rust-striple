@@ -623,6 +623,7 @@ pub trait SignatureScheme {
   fn check_content(publ : &[u8],cont : &mut Read, sig : &[u8]) -> Result<bool>;
 
   /// create keypair (first is public, second is private)
+  /// TODO allow returning none as private keypair for public scheme
   fn new_keypair() -> Result<(Vec<u8>, Vec<u8>)>;
 
 }

@@ -24,8 +24,8 @@ serialize = ["serde_derive","serde","base64"]
 opensslrsa = ["openssl"]
 opensslpbkdf2 = ["openssl"]
 cryptoecdsa = ["ed25519-dalek","sha2","ripemd160","digest","rand42_proxy"]
-public_crypto = ["uuid","ripemd160","digest"]
-public_openssl = ["uuid","openssl"]
+public_crypto = ["ripemd160","digest"]
+public_openssl = ["openssl"]
 for_c = ["libc"]
 any_base = []
 any_base_no_panic = []
@@ -103,10 +103,6 @@ features = ["std"]
 optional = true
 
 
-[dependencies.uuid]
-version = "~0.6.2"
-optional = true
-features = ["v4"]
 
 [dependencies.libc]
 version = "~0.2.40"

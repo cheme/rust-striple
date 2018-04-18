@@ -1,9 +1,13 @@
 //! Module for public striple usage. Those Striple could be use by anyone because the
 //! signing/validation does not involve a private key.
 //! Scheme combine unique id (to ensure different key for same content) and hash for key derivation.
+extern crate rand;
 
-extern crate uuid;
-use self::uuid::Uuid;
+use self::rand::{
+  Rng,
+  RngCore,
+  thread_rng,
+};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use striple::SignatureScheme;
@@ -19,7 +23,6 @@ pub trait CHash : Debug + Clone {
   fn len () -> usize;
 }
 
-// TODO ref to rng gen type (to allow wasm to use ext rand (js) gen
 #[derive(Debug,Clone)]
 pub struct PubSign<H : CHash>(PhantomData<H>);
 
@@ -38,8 +41,14 @@ impl<H : CHash> SignatureScheme for PubSign<H> {
   /// create keypair (first is public, second is private)
   /// TODO size shoud depend on hash length (num biguint?)
   fn new_keypair() -> Result<(Vec<u8>, Vec<u8>)> {
-    let id = Uuid::new_v4().as_bytes().to_vec();
-    Ok((id.clone(),id))
+    let mut rng = thread_rng();
+
+    let mut bytes = [0; 16];
+    rng.fill_bytes(&mut bytes);
+
+
+//    let id = Uuid::new_v4().as_bytes().to_vec();
+    Ok((bytes.to_vec(),bytes.to_vec()))
   }
 }
 

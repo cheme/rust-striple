@@ -39,6 +39,11 @@ use self::stdweb::web::{
   TypedArray,
   ArrayBuffer,
 };
+use self::striple::stripledata::{
+ init_kind_striple_ids,
+ init_base_striple,
+ KINDIDS,
+};
 use self::striple::striple::{
   Striple,
   StripleIf,
@@ -116,8 +121,8 @@ fn test(fp : TypedArray<u8>) {
   // code from exemple load base
   let datafile = Cursor::new(fp.to_vec());
   //let datafile = File::open("base.data").unwrap();
-  let rit : Result<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_> = FileStripleIterator::init(datafile, copy_builder_any, &init_any_cipher_stdin, ()); 
-/*  let striples : Vec<(AnyStriple,Option<Vec<u8>>)> = rit.unwrap().collect();
+  let rit : Result<FileStripleIterator<NoKind,AnyStriple,_,_,_>,_> = FileStripleIterator::init(datafile, copy_builder_any, &init_any_cipher_stdin, ());
+  let striples : Vec<(AnyStriple,Option<Vec<u8>>)> = rit.unwrap().collect();
 
   // Doing some check based upon knowned structure
   if striples[0].1.is_some() {
@@ -143,7 +148,30 @@ fn test(fp : TypedArray<u8>) {
     assert!(striples[13].0.check(&ownedkind).unwrap() == true);
     assert!(striples[14].0.check(&ownedkind).unwrap() == true);
   }
-*/
+
+  let kind = KINDIDS.as_ref().unwrap();
+    //init_kind_striple_ids().unwrap();
+  // build from pub striple
+  let (st,st_priv) = AnyStriple::new(
+    &kind.ecdsaripemd160[..],
+    Vec::new(), // contentenc : 
+    &(&striples[11].0,&Vec::new()[..]), // from
+    Some(striples[0].0.get_id().to_vec()), // about
+    Vec::new(), // contentids
+    None, // content
+  ).unwrap();
+  console!(log,format!("ecdsa striple : {:?}",&st));
+  // fail on rand of uuid v4!!
+  let (st,st_priv) = AnyStriple::new(
+    &kind.pubripemd[..],
+    Vec::new(), // contentenc : 
+    &(&striples[11].0,&Vec::new()[..]), // from
+    Some(striples[0].0.get_id().to_vec()), // about
+    Vec::new(), // contentids
+    None, // content
+  ).unwrap();
+
+  console!(log,format!("pub ripem striple : {:?}",&st));
   console!(log,"test end");
 }
 
