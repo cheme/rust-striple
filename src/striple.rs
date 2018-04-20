@@ -273,6 +273,9 @@ pub trait StripleFieldsIf : Debug {
   fn get_sig(&self) -> &[u8];
 
   fn ser_tosig<'a> (&'a self, res : &mut Vec<u8>) -> Result<Option<&'a BCont<'a>>> {
+    if *self.get_id() != *self.get_from() {
+      res.append(&mut self.get_from().to_vec());
+    }
     // never encode the same value for about and id
     if *self.get_id() != *self.get_about() {
       res.append(&mut self.get_about().to_vec());
@@ -326,7 +329,6 @@ pub trait StripleFieldsIf : Debug {
 
   fn striple_ser<'a> (&'a self, mut res : Vec<u8>) -> Result<(Vec<u8>,Option<&'a BCont<'a>>)> {
     res.append(&mut self.get_id().to_vec());
-    res.append(&mut self.get_from().to_vec());
     res.append(&mut self.get_sig().to_vec());
 
     let ocon = self.ser_tosig(&mut res)?;
@@ -337,7 +339,11 @@ pub trait StripleFieldsIf : Debug {
   fn striple_def (&self) -> StripleDef {
     StripleDef {
         idsize : self.get_id().len(),
-        fromsize : self.get_from().len(),
+        fromsize :  if *self.get_id() != *self.get_from() {
+          self.get_from().len()
+        } else {
+          0
+        },
         sigsize : self.get_sig().len(),
         aboutsize : if *self.get_id() != *self.get_about() {
           self.get_about().len()
@@ -386,16 +392,19 @@ pub trait InstantiableSelfStripleImpl : OwnedStripleFieldsIf + InstantiableStrip
         (sig, id)
       };
 
-      self.init(id.clone(),sig,id);
+      self.add_from(id.clone());
+      self.init(sig,id);
 
       Ok(())
   }
 }
 
 pub trait InstantiableStripleImpl : StripleImpl + Sized {
+  /// add from (should not be call directly, is called by default calc_init implementation)
+  fn add_from(&mut self,
+    from : Vec<u8>);
   /// init signing (should not be call directly, is called by default calc_init implementation)
   fn init(&mut self,
-    from : Vec<u8>,
     sig : Vec<u8>,
     id : Vec<u8>);
 
@@ -408,10 +417,12 @@ pub trait InstantiableStripleImpl : StripleImpl + Sized {
  //   contentids : Vec<Vec<u8>>,
  //   content : Option<BCont<'static>>,
   ) -> Result<()> {
+
+    self.add_from(from.get_id().to_vec());
     let sig = from.sign(&(*self))?;
     let id = from.derive_id(&sig)?;
 
-    self.init(from.get_id().to_vec(),sig,id);
+    self.init(sig,id);
 
     Ok(())
  
@@ -691,11 +702,15 @@ impl<ST : InstantiableStripleImpl> StripleImpl for SelfOwned<ST> {
 impl<ST : InstantiableStripleImpl> InstantiableSelfStripleImpl for SelfOwned<ST> {
 }
 impl<ST : InstantiableStripleImpl> InstantiableStripleImpl for SelfOwned<ST> {
+  fn add_from(&mut self,
+    from : Vec<u8>) {
+    self.0.add_from(from)
+  }
+
   fn init(&mut self,
-    from : Vec<u8>,
     sig : Vec<u8>,
     id : Vec<u8>) {
-    self.0.init(from,sig,id)
+    self.0.init(sig,id)
   }
 }
 
@@ -870,11 +885,11 @@ pub struct StripleRef<'a, T : StripleKind> {
 pub fn ser_stripledesc (d : &StripleDef, res : &mut Vec<u8>) -> Result<()> {
 
   res.append(&mut xtendsize(d.idsize,ID_LENGTH));
-  res.append(&mut xtendsize(d.fromsize,ID_LENGTH));
   res.append(&mut xtendsize(d.sigsize,SIG_LENGTH));
 
   // never encode the same value for about and id (about len must be initiated to 0 in this case
 //  assert!(d.idsize != d.aboutsize || );
+  res.append(&mut xtendsize(d.fromsize,ID_LENGTH));
   res.append(&mut xtendsize(d.aboutsize,ID_LENGTH));
   res.append(&mut xtendsize(d.keysize,KEY_LENGTH));
   res.append(&mut xtendsize(d.contentidssize.len(),CONTENTIDS_LENGTH));
@@ -888,11 +903,14 @@ pub fn ser_stripledesc (d : &StripleDef, res : &mut Vec<u8>) -> Result<()> {
 
 
 impl<T : StripleKind> InstantiableStripleImpl for Striple<T> {
+  fn add_from(&mut self,
+    from : Vec<u8>) {
+    self.from = from;
+  }
+ 
   fn init(&mut self,
-    from : Vec<u8>,
     sig : Vec<u8>,
     id : Vec<u8>) {
-    self.from = from;
     self.sig = sig;
     self.id = id;
   }
@@ -1113,10 +1131,10 @@ pub fn striple_copy_dser<T : StripleIf, K : StripleKind, FS : StripleIf, B> (byt
 pub fn striple_read_def(bytes : &[u8], ix : &mut usize) -> StripleDef
 {
   let idsize = xtendsizedec(bytes, ix, ID_LENGTH);
-  let fromsize = xtendsizedec(bytes, ix, ID_LENGTH);
 
   let sigsize = xtendsizedec(bytes, ix, SIG_LENGTH);
   
+  let fromsize = xtendsizedec(bytes, ix, ID_LENGTH);
   let aboutsize = xtendsizedec(bytes, ix, ID_LENGTH);
 
   let keysize = xtendsizedec(bytes, ix, KEY_LENGTH);
@@ -1170,7 +1188,6 @@ pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (byte
   
   let id = read_len(bytes,ix,sdef.idsize);
   
-  let from = read_len(bytes,ix,sdef.fromsize);
 
   let mut sig = read_len(bytes,ix,sdef.sigsize);
 
@@ -1179,6 +1196,12 @@ pub fn striple_dser<'a, T : StripleIf, K : StripleKind, FS : StripleIf, B> (byte
   }
   
   let startcontent = *ix;
+
+  let from = if sdef.fromsize == 0 {
+    id
+  } else {
+    read_len(bytes,ix,sdef.fromsize)
+  };
 
   let about = if sdef.aboutsize == 0 {
     id
