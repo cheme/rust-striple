@@ -16,6 +16,9 @@
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
 
+#[cfg(target_arch = "wasm32")]
+#[macro_use] extern crate stdweb;
+
 #[cfg(feature="serialize")]
 extern crate serde;
 

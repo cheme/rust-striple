@@ -11,7 +11,7 @@
                         Rust.wasm_striple.then(function(inst_mod) {
                           // just for test
                           window.striples = inst_mod;
-                          inst_mod.test(new Uint8Array(xhr.response));
+                          window.myFirstStriple = inst_mod.test(new Uint8Array(xhr.response));
                         });
                         window.base_striple = xhr.response;
                     }

@@ -3,6 +3,22 @@
 //! This implementation does not include type defined externally and is very likelly to be
 //! overriden in applications.
 //!
+
+#[cfg(target_arch = "wasm32")]
+use stdweb::unstable::{
+  TryFrom,
+};
+#[cfg(target_arch = "wasm32")]
+use stdweb::private::{
+  JsSerializeOwned,
+  Newtype,
+};
+
+#[cfg(target_arch = "wasm32")]
+use stdweb::{
+  Value as StdValue,
+};
+ 
 use std::env;
 use std::io::Cursor;
 use std::fs::File;
@@ -558,3 +574,26 @@ pub fn init_wasm_vec (mut file : Cursor<Vec<u8>>)  -> Vec<(AnyStriple,Option<Vec
   striples
 }
 
+// TODO make alternative TryFromBox (get a box ref which is not js object but wasm ptr)
+#[cfg(target_arch = "wasm32")]
+impl TryFrom<StdValue> for Box<AnyStriple> {
+  type Error = Error;
+
+  fn try_from(st : StdValue) -> StdResult< Self, Self::Error > {
+    match st {
+      StdValue::Reference(ptr) => {
+        let st = unsafe { Box::from_raw(ptr.as_raw() as *mut AnyStriple) };
+        Ok(st)
+      },
+      // TODO a kind for ffi and wasm
+      _ => Err(Error("Std val not ref".to_string(),ErrorKind::DecodingError,None)),
+    }
+  }
+
+}
+/* TODO need to have an alternative (Box<Memory> to JsSerializeOwned)
+#[cfg(target_arch = "wasm32")]
+impl<A> JsSerializeOwned for Newtype<A, Box<AnyStriple>> {
+  fn into_js_owned< 'a >( value: &'a mut Option< Self >, arena: &'a PreallocatedArena ) -> SerializedValue< 'a >;
+  fn memory_required_owned( &self ) -> usize;
+}*/

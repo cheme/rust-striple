@@ -25,13 +25,25 @@ pub extern "C" fn test3() {
 
 
 #![feature(proc_macro)]
-
 extern crate striple;
+#[cfg(target_arch = "wasm32")]
+use std::mem;
 #[cfg(target_arch = "wasm32")]
 #[macro_use] extern crate stdweb;
 #[cfg(target_arch = "wasm32")]
 use self::stdweb::{
+  Value as StdValue,
   js_export,
+};
+
+#[cfg(target_arch = "wasm32")]
+use std::os::raw::{
+  c_char,
+  c_void,
+};
+#[cfg(target_arch = "wasm32")]
+use self::stdweb::unstable::{
+  TryFrom,
 };
 #[cfg(target_arch = "wasm32")]
 use self::stdweb::web::{
@@ -96,6 +108,7 @@ fn init_base(base : TypedArray<u8>) {
 fn init_base2(base : ArrayBuffer) {
 
 }
+
 #[cfg(target_arch = "wasm32")]
 #[js_export]
 fn init_base3(base : String) {
@@ -116,7 +129,7 @@ pub extern "C" fn test3() {
  
 #[cfg(target_arch = "wasm32")]
 #[js_export]
-fn test(fp : TypedArray<u8>) {
+fn test(fp : TypedArray<u8>) -> i32 {
   console!(log,"test start : ", &fp);
   // code from exemple load base
   let datafile = Cursor::new(fp.to_vec());
@@ -141,7 +154,7 @@ fn test(fp : TypedArray<u8>) {
     assert!(striples[4].0.check(&ownedroot).unwrap() == true);
   }
   // Doing some public check
-   if striples[11].1.is_none() {
+  if striples[11].1.is_none() {
     console!(log,"doing public checking");
     let ownedkind = (&striples[11].0, &[][..]);
 
@@ -173,5 +186,40 @@ fn test(fp : TypedArray<u8>) {
 
   console!(log,format!("pub ripem striple : {:?}",&st));
   console!(log,"test end");
+  let b = Box::new(striples[0].0.clone());
+  Box::into_raw(b) as i32
 }
 
+// TODO see alternative for box reference
+#[cfg(target_arch = "wasm32")]
+#[js_export]
+fn striple_check(st : i32, from : i32) -> bool {
+  let st_ob = unsafe { Box::from_raw(st as *mut AnyStriple) };
+  let res = st_ob.get_key().len() == from as usize;
+  mem::forget(st_ob);
+  res
+//  let from_ob = unsafe { Box::from_raw(from as *mut AnyStriple) };
+//  st_ob.check(from_ob.as_ref()).unwrap()
+}
+#[cfg(target_arch = "wasm32")]
+#[js_export]
+fn striple_len(st : i32) -> i32 {
+  let st_ob = unsafe { Box::from_raw(st as *mut AnyStriple) };
+  let res = st_ob.get_key().len() as i32;
+  mem::forget(st_ob);
+  res
+//  let from_ob = unsafe { Box::from_raw(from as *mut AnyStriple) };
+//  st_ob.check(from_ob.as_ref()).unwrap()
+}
+
+
+/*
+pub unsafe extern "C" fn striple_check(st : striple_ptr, from : striple_ptr) -> bool {
+  let s : &AnyStriple = transmute(st.0);
+  let f : &AnyStriple = transmute(from);
+  //let s : &StripleIf = transmute(st);
+  //let f : &StripleIf = transmute(from);
+  s.check(f).unwrap_or(false)
+}
+
+*/
