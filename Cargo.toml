@@ -1,3 +1,6 @@
+
+cargo-features = ["edition"]
+
 [package]
 
 name = "striple"
@@ -9,7 +12,7 @@ homepage = "https://github.com/cheme/rust-striple"
 description = "striple support for rust."
 exclude = ["*"]
 include = ["src/**/*","examples/**/*","Cargo.toml","README.md"]
-
+edition = '2018'
 
 [lib]
 name = "striple"

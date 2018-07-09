@@ -11,7 +11,7 @@
 #![feature(no_std)]
 #![no_std]
 */
-
+#![feature(rust_2018_preview)]
 
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
@@ -50,11 +50,11 @@ pub mod stripledata;
 mod rsa_openssl;
 pub mod keyder {
   #[cfg(feature="opensslrsa")]
-  pub use rsa_openssl::SHA512KD;
+  pub use crate::rsa_openssl::SHA512KD;
   #[cfg(feature="cryptoecdsa")]
-  pub use ecdsa_crypto::RIPEMD160KD;
-  pub use striple::IdentityKD;
-  pub use striple::NoIDDer;
+  pub use crate::ecdsa_crypto::RIPEMD160KD;
+  pub use crate::striple::IdentityKD;
+  pub use crate::striple::NoIDDer;
 
 }
 
@@ -65,8 +65,8 @@ mod ecdsa_crypto;
 mod openssl_common {
   extern crate openssl;
   use self::openssl::error::ErrorStack;
-  use striple::Error;
-  use striple::ErrorKind;
+  use crate::striple::Error;
+  use crate::striple::ErrorKind;
   impl From<ErrorStack> for Error {
     #[inline]
     fn from(e : ErrorStack) -> Error {
@@ -76,13 +76,13 @@ mod openssl_common {
 }
 
 pub mod striple_kind {
-  pub use striple::NoKind;
+  pub use crate::striple::NoKind;
 
-  pub use anystriple::Rsa2048Sha512;
-  pub use anystriple::EcdsaRipemd160;
-  pub use anystriple::PubRipemd;
-  pub use anystriple::PubSha512;
-  pub use anystriple::PubSha256;
+  pub use crate::anystriple::Rsa2048Sha512;
+  pub use crate::anystriple::EcdsaRipemd160;
+  pub use crate::anystriple::PubRipemd;
+  pub use crate::anystriple::PubSha512;
+  pub use crate::anystriple::PubSha256;
 
 
 }

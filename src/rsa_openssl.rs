@@ -4,13 +4,13 @@
 
 extern crate openssl;
 
-use striple::SignatureScheme;
-use striple::IDDerivation;
-use striple::StripleKind;
-use striple::Error;
-use striple::Result;
-use striple::ErrorKind;
-use anystriple::Rsa2048Sha512;
+use crate::striple::SignatureScheme;
+use crate::striple::IDDerivation;
+use crate::striple::StripleKind;
+use crate::striple::Error;
+use crate::striple::Result;
+use crate::striple::ErrorKind;
+use crate::anystriple::Rsa2048Sha512;
 use self::openssl::hash::{Hasher,MessageDigest,hash};
 use self::openssl::pkey::{PKey};
 use self::openssl::rsa::{Rsa};
@@ -21,13 +21,13 @@ use self::openssl::sign::{
 };
 use std::io::Write;
 use std::io::Read;
-use stripledata;
+use crate::stripledata;
 
-use anystriple::PubSha512;
+use crate::anystriple::PubSha512;
 
 
 #[cfg(test)]
-use striple::test::{test_striple_kind,chaining_test};
+use crate::striple::test::{test_striple_kind,chaining_test};
 
 static RSA_SIZE : u32 = 2048;
 

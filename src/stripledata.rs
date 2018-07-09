@@ -21,25 +21,25 @@ use std::borrow::{
 #[cfg(target_arch = "wasm32")]
 use std::cell::RefCell;
 
-use striple::Striple;
-use striple::{
+use crate::striple::Striple;
+use crate::striple::{
   StripleFieldsIf,
   OwnedStripleFieldsIf,
   OwnedStripleIf,
   StripleKind,
   NoKind,
 };
-use striple::{StripleIf};
-use striple::{ref_builder_id_copy};
+use crate::striple::{StripleIf};
+use crate::striple::{ref_builder_id_copy};
 #[cfg(feature="serialize")]
-use striple::{UnsafeOwnedStripleDisp};
+use crate::striple::{UnsafeOwnedStripleDisp};
 
 use std::fs::File;
-use storage::{FileStripleIterator,init_noread_key};
+use crate::storage::{FileStripleIterator,init_noread_key};
 #[cfg(not(target_arch = "wasm32"))]
 use std::env;
 use std::result::Result as StdResult;
-use striple::{
+use crate::striple::{
   Result,
   from_option,
   from_error,
@@ -51,11 +51,11 @@ use std::fmt::Result as FmtResult;
 #[cfg(feature="serialize")]
 use std::fmt::{Display,Formatter};
 
-use anystriple::Rsa2048Sha512;
-use anystriple::EcdsaRipemd160;
-use anystriple::PubRipemd;
-use anystriple::PubSha512;
-use anystriple::PubSha256;
+use crate::anystriple::Rsa2048Sha512;
+use crate::anystriple::EcdsaRipemd160;
+use crate::anystriple::PubRipemd;
+use crate::anystriple::PubSha512;
+use crate::anystriple::PubSha256;
 
 
 

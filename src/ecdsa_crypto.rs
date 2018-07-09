@@ -10,12 +10,12 @@ extern crate sha2;
 // warning, only visible if linkage is called from main
 extern crate ed25519_dalek;
 extern crate ripemd160;
-use striple::SignatureScheme;
-use striple::IDDerivation;
-use striple::StripleKind;
-use striple::Error;
-use striple::ErrorKind;
-use striple::Result;
+use crate::striple::SignatureScheme;
+use crate::striple::IDDerivation;
+use crate::striple::StripleKind;
+use crate::striple::Error;
+use crate::striple::ErrorKind;
+use crate::striple::Result;
 
 use self::sha2::Sha512;
 use self::ripemd160::Digest;
@@ -26,7 +26,7 @@ use self::ed25519_dalek::{
   Signature,
   DecodingError,
 };
-use stripledata;
+use crate::stripledata;
 use self::rand::{
   Rng,
   Error as RandError,
@@ -35,13 +35,13 @@ use self::rand::os::OsRng;
 use self::rand42::Rng as Rng42;
 use std::io::Read;
 use std::io::Cursor;
-use anystriple::EcdsaRipemd160;
+use crate::anystriple::EcdsaRipemd160;
 
 #[cfg(test)]
-use anystriple::PubRipemd;
+use crate::anystriple::PubRipemd;
 
 #[cfg(test)]
-use striple::test::{test_striple_kind,chaining_test};
+use crate::striple::test::{test_striple_kind,chaining_test};
 
 /// Key derivation using ripemd160
 pub struct RIPEMD160KD;
