@@ -14,7 +14,7 @@
 //! TODO return error : cf all unwrap_or(false)
 
 
-use striple::{
+use crate::striple::{
   StripleIf,
   StripleFieldsIf,
   OwnedStripleIf,
@@ -25,9 +25,9 @@ use striple::{
   StripleRef,
   Error
 };
-use anystriple::{AnyStriple,copy_builder_any};
+use crate::anystriple::{AnyStriple,copy_builder_any};
 use std::mem::transmute;
-use storage::{FileStripleIterator,init_any_cipher_stdin,AnyCyphers};
+use crate::storage::{FileStripleIterator,init_any_cipher_stdin,AnyCyphers};
 use std::fs::File;
 use libc::{size_t,c_char,strlen};
 use std::ptr;

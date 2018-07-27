@@ -10,12 +10,12 @@ use self::rand::{
 };
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use striple::SignatureScheme;
-use striple::PublicScheme;
-use striple::Error;
-use striple::Result;
+use crate::striple::SignatureScheme;
+use crate::striple::PublicScheme;
+use crate::striple::Error;
+use crate::striple::Result;
 use std::io::Read;
-use anystriple::PubRipemd;
+use crate::anystriple::PubRipemd;
 
 /// Technical trait
 pub trait CHash : Debug + Clone {
@@ -60,17 +60,17 @@ impl<H : CHash> PublicScheme for PubSign<H> {}
 #[cfg(feature="public_crypto")]
 pub mod public_crypto {
   extern crate ripemd160;
-  use striple::{StripleKind,IdentityKD,Result};
-  use stripledata;
+  use crate::striple::{StripleKind,IdentityKD,Result};
+  use crate::stripledata;
   use self::ripemd160::Digest;
   use self::ripemd160::Ripemd160;
   use super::{PubSign,CHash};
   use std::io::Read;
   use std::io::Cursor;
-  use anystriple::PubRipemd;
+  use crate::anystriple::PubRipemd;
 
   #[cfg(test)]
-  use striple::test::{test_striple_kind,chaining_test};
+  use crate::striple::test::{test_striple_kind,chaining_test};
 
 
   impl StripleKind for PubRipemd {
@@ -126,13 +126,13 @@ pub mod public_openssl {
   use std::io::Read;
   use std::io::Cursor;
   #[cfg(test)]
-  use striple::test::{test_striple_kind,chaining_test};
-  use stripledata;
-  use striple::{StripleKind,IdentityKD,Result};
+  use crate::striple::test::{test_striple_kind,chaining_test};
+  use crate::stripledata;
+  use crate::striple::{StripleKind,IdentityKD,Result};
   use super::{PubSign,CHash};
-  use anystriple::PubRipemd;
-  use anystriple::PubSha512;
-  use anystriple::PubSha256;
+  use crate::anystriple::PubRipemd;
+  use crate::anystriple::PubSha512;
+  use crate::anystriple::PubSha256;
  
 fn hash_openssl(buff1 : &[u8], buff2 : &mut Read, typ : MessageDigest, blen : usize) -> Result<Vec<u8>> {
   //println!("{:?}",buff1);

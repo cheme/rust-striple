@@ -18,15 +18,15 @@ use std::io::{stdin,BufRead,Cursor};
 use std::env;
 use std::fs::File;
 use std::fs::metadata;
-use striple::{StripleIf,StripleKind,xtendsize,xtendsizeread,xtendsizeread_foralloc,StripleRef};
+use crate::striple::{StripleIf,StripleKind,xtendsize,xtendsizeread,xtendsizeread_foralloc,StripleRef};
 use std::marker::PhantomData;
-use striple::Error as StripleError;
-use striple::ErrorKind as StripleErrorKind;
+use crate::striple::Error as StripleError;
+use crate::striple::ErrorKind as StripleErrorKind;
 //use striple::striple_copy_dser;
-use striple::striple_dser_with_def;
-use striple::BCont;
+use crate::striple::striple_dser_with_def;
+use crate::striple::BCont;
 use std::path::PathBuf;
-use striple::{
+use crate::striple::{
   Result,
   from_error,
   from_option,
@@ -910,17 +910,16 @@ impl<SK : StripleKind, T : StripleIf, R : Read + Seek, B, C : StorageCypher> Ite
 #[cfg(test)]
 pub mod test {
 
-  use striple::Striple;
-//  use striple::copy_builder_id;
-  use striple::ref_builder_id_copy;
-  use striple::NoKind;
-  use striple::Result;
-  use storage::{FileMode,NoCypher,write_striple,read_striple,write_striple_file_ref,FileStripleIterator,init_any_cypher_with_pass};
-  use striple::test::{sample_striple1,sample_striple2,sample_striple3,sample_striple4,random_bytes,compare_striple};
+  use crate::striple::Striple;
+  use crate::striple::ref_builder_id_copy;
+  use crate::striple::NoKind;
+  use crate::striple::Result;
+  use crate::storage::{FileMode,NoCypher,write_striple,read_striple,write_striple_file_ref,FileStripleIterator,init_any_cypher_with_pass};
+  use crate::striple::test::{sample_striple1,sample_striple2,sample_striple3,sample_striple4,random_bytes,compare_striple};
   use std::io::{Cursor,Seek,SeekFrom};
 
   #[cfg(feature="opensslpbkdf2")]
-  use storage::{Pbkdf2,StorageCypher};
+  use crate::storage::{Pbkdf2,StorageCypher};
 
   #[cfg(feature="opensslpbkdf2")]
   #[test]

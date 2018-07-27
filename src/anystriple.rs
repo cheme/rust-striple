@@ -22,15 +22,15 @@ use stdweb::{
 use std::env;
 use std::io::Cursor;
 use std::fs::File;
-use stripledata;
-use storage::{
+use crate::stripledata;
+use crate::storage::{
   FileStripleIterator,
   init_noread_key,
   init_any_cipher_stdin,
 };
 use std::io::Read;
-use striple::IDDerivation;
-use striple::{
+use crate::striple::IDDerivation;
+use crate::striple::{
   ByteSlice,
   SignatureScheme,
   NoSigCh,
@@ -53,8 +53,8 @@ use striple::{
   from_option,
   ref_builder_id_copy,
 };
-use striple::NoKind;
-use striple::Result;
+use crate::striple::NoKind;
+use crate::striple::Result;
 use std::result::Result as StdResult;
 
 
