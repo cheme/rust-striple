@@ -1463,7 +1463,7 @@ impl<'de,T : StripleKind> Deserialize<'de> for Striple<T> {
 }
 
 #[derive(Debug)]
-pub struct Error(pub String, pub ErrorKind, pub Option<Box<ErrorTrait>>);
+pub struct Error(pub String, pub ErrorKind, pub Option<Box<ErrorTrait + Send>>);
 
 #[inline]
 pub fn from_error<T,E1 : Into<Error>>(r : StdResult<T, E1>) -> StdResult<T,Error>
